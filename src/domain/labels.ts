@@ -60,6 +60,23 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   WOUND_CHECK: 'Wound check',
 };
 
+const PLAN_WORD: Record<string, string> = { NEW: 'new', STOP: '"stop"', CHANGED: 'changed', CONTINUE: '"continue"' };
+
+/**
+ * Display form of an engine reason: claim codes become words, confidence becomes a
+ * percentage, the rule's code name is dropped. The engine's own text is unchanged.
+ */
+export function readableReason(reason: string): string {
+  return reason
+    .replace(/→ ([A-Z_]+) \(confidence (\d(?:\.\d+)?)/g, (_m, claim: string, c: string) => {
+      const label = claim in CLAIM_LABEL ? CLAIM_LABEL[claim as EvidenceClaim] : claim;
+      return `→ understood as "${label}" (confidence ${Math.round(Number(c) * 100)}%`;
+    })
+    .replace(/^Rule [A-Z_]+: /, 'Rule: ')
+    .replace(/\b(NEW|STOP|CHANGED|CONTINUE)\b/g, (w) => PLAN_WORD[w] ?? w)
+    .replace(/confidence below (\d\.\d+)/, (_m, c: string) => `confidence below ${Math.round(Number(c) * 100)}%`);
+}
+
 /** Short label for a task (care graph pills, queue rows). */
 export function shortTaskLabel(task: CareTask, patient: Patient): string {
   const drug = getDrug(task.refId)?.generic ?? task.refId;
@@ -83,6 +100,16 @@ export function shortTaskLabel(task: CareTask, patient: Patient): string {
     case 'WOUND_CHECK':
       return 'Wound check';
   }
+}
+
+/** The thing a task is about, without the action: "Apixaban", "CBC", "Cardiology", "Wound". */
+export function entityLabel(task: CareTask, patient: Patient): string {
+  const lab = patient.plan.labs.find((l) => l.id === task.refId);
+  const fu = patient.plan.followUps.find((f) => f.id === task.refId);
+  if (task.type.startsWith('MED_')) return getDrug(task.refId)?.generic ?? task.refId;
+  if (task.type === 'LAB_DONE') return lab?.test ?? 'Lab';
+  if (task.type === 'WOUND_CHECK') return 'Wound';
+  return (fu?.clinic ?? 'Follow-up').replace(/\s+clinic$/i, '');
 }
 
 /** What a gap is about: the task's short label, or the medicine for medication-level gaps. */

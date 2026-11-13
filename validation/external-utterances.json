@@ -1,0 +1,22 @@
+{
+  "name": "WASL external real-user answers",
+  "about": "Answers from people who have never seen the parser or the synthetic dataset. See validation/README.md → External real-user check for how they are collected. No names, phone numbers or health data.",
+  "questions": {
+    "MED_START": "بديت حبة الضغط الجديدة؟",
+    "MED_CONTINUE": "للحين مستمر على حبوب السكر؟",
+    "STOPPED_CHECK": "وقّفت المسكن زي ما قال لك الدكتور؟",
+    "DOSE_CHECK": "تاخذ إبرة السكر على الجرعة الجديدة اللي في ورقة الخروج؟",
+    "OPEN_MEDS": "فيه أي دواء ثاني تاخذه ما ذكرناه؟"
+  },
+  "schemaExample": {
+    "id": "x001",
+    "questionKind": "STOPPED_CHECK",
+    "context": { "drugId": "tramadol" },
+    "text": "لا والله للحين اخذه",
+    "expectedIntent": "STILL_TAKING",
+    "channel": "typed | voice_transcribed",
+    "respondent": "R01",
+    "labelledBy": "team member initials, labelled before running the parser"
+  },
+  "items": []
+}

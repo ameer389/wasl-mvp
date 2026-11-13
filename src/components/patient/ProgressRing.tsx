@@ -25,7 +25,14 @@ export default function ProgressRing({ done, total, caption, size = 168 }: Progr
       className="relative"
       style={{ width: size, height: size }}
     >
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden="true">
+      {/* Starts at the top. In RTL it is mirrored so it fills counter-clockwise (towards the reading direction). */}
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="[transform:rotate(-90deg)] rtl:[transform:scaleX(-1)_rotate(-90deg)]"
+        aria-hidden="true"
+      >
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-surface-2)" strokeWidth={stroke} />
         <circle
           cx={size / 2}

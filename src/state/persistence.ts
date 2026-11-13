@@ -13,7 +13,9 @@ function isDemoState(value: unknown): value is DemoState {
     Array.isArray(v.evidence) &&
     Array.isArray(v.resolutions) &&
     Array.isArray(v.audit) &&
-    typeof v.simulatedDay === 'number'
+    typeof v.simulatedDay === 'number' &&
+    !!v.tour &&
+    typeof v.tour.step === 'number'
   );
 }
 

@@ -1,6 +1,8 @@
 import { Route, Routes } from 'react-router-dom';
 import ConsoleShell from './components/console/ConsoleShell';
 import PatientShell from './components/patient/PatientShell';
+import TourPanel from './components/TourPanel';
+import { ToastProvider } from './components/ui';
 import { ROUTES } from './routes';
 import { DemoStoreProvider } from './state/store';
 import NotFound from './pages/NotFound';
@@ -20,6 +22,7 @@ import Today from './pages/patient/Today';
 export default function App() {
   return (
     <DemoStoreProvider>
+      <ToastProvider viewportClassName="fixed top-4 left-1/2 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2">
       <Routes>
         <Route path={ROUTES.launcher} element={<RoleLauncher />} />
 
@@ -44,6 +47,8 @@ export default function App() {
 
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <TourPanel />
+      </ToastProvider>
     </DemoStoreProvider>
   );
 }

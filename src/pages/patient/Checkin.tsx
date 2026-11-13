@@ -32,12 +32,23 @@ const NURSE_LINE = 'بنخلي الممرضة تتأكد منك';
 function QuestionHeader({ q, index, total, family }: { q: Question; index: number; total: number; family: boolean }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2">
         <span className="text-sm text-muted">
           سؤال {toArabicDigits(index + 1)} من {toArabicDigits(total)}
         </span>
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
-          <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${((index + 1) / total) * 100}%` }} />
+        {/* Full-width track; the fill is pinned to the start edge (right in RTL) and grows towards the end. */}
+        <div
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={index + 1}
+          aria-label="تقدّم الأسئلة"
+          className="relative h-2 w-full overflow-hidden rounded-full bg-surface-3"
+        >
+          <div
+            className="absolute inset-y-0 start-0 rounded-full bg-accent transition-[width] duration-300"
+            style={{ width: `${((index + 1) / total) * 100}%` }}
+          />
         </div>
       </div>
       <h1 className="text-2xl leading-snug font-bold">{family ? q.familyTextAr : q.textAr}</h1>

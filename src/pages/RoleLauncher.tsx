@@ -1,11 +1,12 @@
-import { ArrowLeft, ArrowRight, Monitor, Smartphone, Stethoscope, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Monitor, PlayCircle, Smartphone, Stethoscope, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import DemoBadge from '../components/DemoBadge';
-import { Badge, cardClasses, focusRing } from '../components/ui';
+import { Badge, Button, cardClasses, focusRing, useToast } from '../components/ui';
 import { WaslMark } from '../components/WaslMark';
 import { APP_NAME, APP_TAGLINE } from '../config';
 import { cn } from '../lib/cn';
 import { DEMO_PATIENT_ID, ROUTES, patientCheckinPath } from '../routes';
+import { useDemoStore } from '../state/store';
 
 interface RoleCardProps {
   to: string;
@@ -56,6 +57,44 @@ function RoleCard({ to, icon: Icon, title, description, tag, tagIcon: TagIcon, r
   );
 }
 
+function TourStartCard() {
+  const store = useDemoStore();
+  const toast = useToast();
+  const { tour } = store.state;
+  const canResume = !tour.active && tour.step > 0;
+  const start = () => {
+    const snapshot = store.state;
+    store.tour({ type: 'START' });
+    toast.show({ message: 'Demo reset for the guided tour.', action: { label: 'Undo', onClick: () => store.replace(snapshot) } });
+  };
+  return (
+    <div className={cn(cardClasses, 'flex flex-col items-center gap-4 border-accent/40 p-6 text-center sm:flex-row sm:text-left')}>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-2 text-accent">
+        <PlayCircle size={26} aria-hidden="true" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-lg font-semibold">
+          Start the guided demo · 3 min{' '}
+          <span lang="ar" dir="rtl" className="font-arabic text-muted">
+            · جولة سريعة
+          </span>
+        </h2>
+        <p className="text-sm text-muted">Follow one patient, Abu Mohammed, from discharge plan to a care gap a clinician resolves.</p>
+      </div>
+      <div className="flex shrink-0 flex-col gap-2">
+        <Button variant="primary" size="md" onClick={tour.active ? () => store.tour({ type: 'GOTO', step: tour.step }) : start}>
+          {tour.active ? 'Tour in progress' : 'Start the guided demo'}
+        </Button>
+        {canResume && (
+          <Button variant="ghost" size="sm" onClick={() => store.tour({ type: 'RESUME' })}>
+            Resume at step {tour.step + 1}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** "/" — pick an app. Compact and app-like, not a marketing page. */
 export default function RoleLauncher() {
   return (
@@ -69,8 +108,10 @@ export default function RoleLauncher() {
           <p className="text-sm text-muted">{APP_TAGLINE}</p>
         </header>
 
-        <main className="w-full">
-          <h1 className="sr-only">Choose an app</h1>
+        <main className="flex w-full flex-col gap-6" data-tour="launcher">
+          <h1 className="sr-only">Choose how to explore WASL</h1>
+          <TourStartCard />
+          <p className="text-center text-xs font-medium tracking-wider text-faint uppercase">Or explore freely</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <RoleCard
               to={ROUTES.careGaps}

@@ -137,5 +137,5 @@ export function fitGraphMetrics(tasks: readonly CareTask[], containerWidth: numb
   const lastDay = Math.max(FOLLOW_UP_DAYS, ...tasks.map((t) => t.deadlineDay));
   const laneLabelWidth = 92;
   const dayWidth = Math.max(40, Math.floor((containerWidth - laneLabelWidth - 8) / (lastDay + 1)));
-  return { dayWidth, laneLabelWidth, headerHeight: 32, nodeHeight: 26, rowGap: 6, lanePadding: 10 };
+  return { dayWidth, laneLabelWidth, headerHeight: 32, nodeHeight: 34, rowGap: 6, lanePadding: 10 };
 }

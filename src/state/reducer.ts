@@ -4,6 +4,7 @@
  */
 import { makeAudit } from '../domain/audit';
 import { clampDay } from '../domain/time';
+import { TOUR_START_DAY, tourDay, tourReducer, type TourEvent } from '../domain/tour';
 import type { AuditAction, AuditEntry, Evidence, Patient, ResolutionAction } from '../domain/types';
 import { seedState, type DemoState } from './demoState';
 
@@ -24,6 +25,8 @@ export type DemoAction =
   /** One check-in answer: all its evidence plus exactly one audit entry. */
   | { type: 'RECORD_ANSWER'; patientId: string; evidence: Evidence[]; actor: string; target: string; note: string; at: string }
   | { type: 'COMPLETE_CHECKIN'; patientId: string; actor: string; note: string; at: string }
+  /** Guided demo. START resets to the seed at the tour's first day; steps move the simulated day. */
+  | { type: 'TOUR'; event: TourEvent }
   | { type: 'RESET' }
   | { type: 'REPLACE'; state: DemoState };
 
@@ -95,6 +98,12 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         ...state,
         audit: appendAudit(state, { actor: action.actor, action: 'CHECKIN_COMPLETED', target: action.patientId, at: action.at, note: action.note }),
       };
+
+    case 'TOUR': {
+      const base = action.event.type === 'START' ? { ...seedState(), simulatedDay: TOUR_START_DAY } : state;
+      const tour = tourReducer(base.tour, action.event);
+      return { ...base, tour, simulatedDay: tourDay(tour) ?? base.simulatedDay };
+    }
 
     case 'RESET':
       return seedState();

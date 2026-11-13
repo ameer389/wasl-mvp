@@ -51,7 +51,7 @@ export function EvidenceChip({ evidence }: { evidence: Evidence }) {
 export function EvidenceItem({ evidence }: { evidence: Evidence }) {
   const low = evidence.confidence < 0.7;
   return (
-    <li className="flex gap-3 rounded-lg border border-line bg-bg/40 p-3">
+    <li className="flex gap-3 rounded-lg border border-line bg-bg/40 p-3" title={`Record ${evidence.id}`}>
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-muted">
         <SourceIcon source={evidence.source} />
       </div>
@@ -65,7 +65,6 @@ export function EvidenceItem({ evidence }: { evidence: Evidence }) {
         </div>
         {evidence.rawText && <ArabicQuote text={evidence.rawText} className="block text-sm" />}
         {evidence.detail && <p className="text-xs text-muted">{evidence.detail}</p>}
-        <p className="text-xs text-faint">Evidence {evidence.id}</p>
       </div>
     </li>
   );

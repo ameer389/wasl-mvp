@@ -27,3 +27,32 @@ Medicine extraction on test is 55.6% exact match (n=9). Three of the four mismat
 - 130 items is small; one item is ≈1.3 percentage points on the test split.
 - The text is typed, not recorded: speech-to-text errors are only imitated (missing hamza, ة/ه, joined words).
 - Southern and Hijazi dialects are under-represented (8 and 16 items).
+
+---
+
+# Full validation suite
+
+`npm run validate` runs everything and writes `results.json` (shown on the `/validation` page) and `RESULTS.md`:
+
+1. **Gap detection** on seeded synthetic scenarios (`scenarios.ts`, seed 20261114): 50 cases with known injected gaps (5 per gap type, some with a second gap) and 10 clean controls.
+2. **Parser** numbers, reused from `parser-results.json`. The parser is not re-tuned here.
+3. **Question reduction**: the adaptive check-in versus a full script asked every day. The "minutes saved" figure is an assumption (1.5 minutes per question, and a daily full-script call that nobody does today), so it is an upper bound.
+4. **Safety invariants**: runs `tests/domain/safety.test.ts` and lists each invariant.
+5. **External real-user check**, below.
+
+The rules are deterministic and the scenarios were written by the team. A high score shows the logic covers each gap type and stays quiet on clean cases. It does not show real-world accuracy.
+
+## External real-user check
+
+**Why.** The synthetic answers and the parser were written by the same people. The fairest quick test is answers from people who have never seen either.
+
+**How answers are collected.**
+- People outside the team answer 5 standard questions (listed in `external-utterances.json`) on WhatsApp, as if they were the patient or a family member.
+- They may type or send a voice note. Voice notes are transcribed word for word by a team member, without fixing spelling or dialect.
+- Answers are anonymised: a respondent code (R01, R02, …) only. No names, no phone numbers, no screenshots.
+- No health data: respondents are told to invent the answer ("answer as if…"), not to describe their own medicines.
+- A team member labels the intended meaning (`expectedIntent`) before the parser is run, and does not relabel afterwards.
+
+**How it is scored.** `npm run eval:external` runs the frozen parser once and writes `external-results.json`. It refuses to overwrite a finished result unless `--force` is passed, which is only for adding new answers. Then run `npm run validate` to include it in `RESULTS.md` and the page.
+
+**Status.** Pending: `external-utterances.json` has no items yet.

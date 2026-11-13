@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useFamilyMode } from '../../components/patient/familyMode';
 import ProgressRing from '../../components/patient/ProgressRing';
 import { Card, buttonClasses } from '../../components/ui';
+import { TODAY_INTRO_AR } from '../../content/glossary';
 import { toArabicDigits } from '../../lib/arabicDigits';
 import { patientCheckinFlowPath } from '../../routes';
 import { useCheckinToday, useQuestionPlan } from '../../state/store';
@@ -23,6 +24,7 @@ export default function Today() {
 
   return (
     <div className="flex flex-col gap-6 px-5 py-6">
+      <p className="text-base leading-relaxed text-muted">{TODAY_INTRO_AR}</p>
       <section className="flex justify-center">
         <ProgressRing done={done} total={total} caption="تشييك اليوم" />
       </section>

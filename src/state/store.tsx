@@ -5,6 +5,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import { targetsPatient } from '../domain/auditTrail';
 import type { QuestionPlan } from '../domain/questionPlanner';
+import type { TourEvent } from '../domain/tour';
 import type { CareTask, Day, Evidence, EvidenceClaim, Patient, ResolutionAction } from '../domain/types';
 import type { DemoState } from './demoState';
 import { loadState, saveState } from './persistence';
@@ -33,6 +34,7 @@ interface DemoStore {
   /** Save one check-in answer (evidence + one audit entry). */
   recordAnswer: (patientId: string, evidence: Evidence[], meta: { actor: string; target: string; note: string }) => void;
   completeCheckin: (patientId: string, actor: string, note: string) => void;
+  tour: (event: TourEvent) => void;
   reset: () => void;
   replace: (state: DemoState) => void;
 }
@@ -101,6 +103,7 @@ export function DemoStoreProvider({ children, initialState }: { children: ReactN
       addPatient: (patient, by = DEMO_CLINICIAN) => dispatch({ type: 'ADD_PATIENT', patient, by, at: now() }),
       recordAnswer: (patientId, evidence, meta) => dispatch({ type: 'RECORD_ANSWER', patientId, evidence, ...meta, at: now() }),
       completeCheckin: (patientId, actor, note) => dispatch({ type: 'COMPLETE_CHECKIN', patientId, actor, note, at: now() }),
+      tour: (event) => dispatch({ type: 'TOUR', event }),
       reset: () => dispatch({ type: 'RESET' }),
       replace: (s) => dispatch({ type: 'REPLACE', state: s }),
     };

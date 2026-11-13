@@ -1,11 +1,11 @@
-import { AlertTriangle, Check, Circle } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, Check, CheckCircle2, Circle, FlaskConical, Bandage, Play, Repeat, SlidersHorizontal, Square, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GAP_TYPE_LABEL, OWNER_LABEL, TASK_TYPE_LABEL, shortTaskLabel } from '../../../domain/labels';
+import { GAP_TYPE_LABEL, OWNER_LABEL, TASK_TYPE_LABEL, entityLabel, shortTaskLabel } from '../../../domain/labels';
 import { DEFAULT_GRAPH_METRICS, fitGraphMetrics, layoutCareGraph } from '../../../domain/graphLayout';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
-import type { CareTask, Risk, TaskStatus } from '../../../domain/types';
+import type { CareTask, Risk, TaskStatus, TaskType } from '../../../domain/types';
 import { cn } from '../../../lib/cn';
-import { Card, Drawer, SegmentedControl, Tooltip, focusRing } from '../../ui';
+import { Card, Drawer, InfoTip, SegmentedControl, Tooltip, focusRing } from '../../ui';
 import { RiskBadge, StatusBadge } from '../badges';
 import { EvidenceItem } from '../evidence';
 import type { PatientView } from './types';
@@ -28,6 +28,23 @@ function StatusGlyph({ status }: { status: TaskStatus }) {
   if (status === 'VERIFIED' || status === 'CLOSED') return <Check size={12} aria-hidden="true" className="shrink-0" />;
   if (status === 'GAP' || status === 'ESCALATED') return <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />;
   return <Circle size={10} aria-hidden="true" className="shrink-0" />;
+}
+
+/** What the task asks for (used on compact pills and in the legend). */
+const ACTION_ICON: Record<TaskType, { icon: LucideIcon; label: string }> = {
+  MED_START: { icon: Play, label: 'Start' },
+  MED_STOP: { icon: Square, label: 'Stop' },
+  MED_CONTINUE: { icon: Repeat, label: 'Continue' },
+  MED_DOSE_CHANGE: { icon: SlidersHorizontal, label: 'Dose change' },
+  LAB_DONE: { icon: FlaskConical, label: 'Lab' },
+  FOLLOWUP_BOOKED: { icon: CalendarPlus, label: 'Booking' },
+  FOLLOWUP_ATTENDED: { icon: CheckCircle2, label: 'Visit' },
+  WOUND_CHECK: { icon: Bandage, label: 'Wound check' },
+};
+
+function ActionGlyph({ type, size = 12 }: { type: TaskType; size?: number }) {
+  const Icon = ACTION_ICON[type].icon;
+  return <Icon size={size} aria-hidden="true" className="shrink-0" />;
 }
 
 const LEGEND: { label: string; className: string; status: TaskStatus }[] = [
@@ -62,6 +79,10 @@ export function CareGraphTab({ view }: { view: PatientView }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
+        <span className="inline-flex items-center gap-1 text-sm font-semibold">
+          Care graph
+          <InfoTip term="careGraph" />
+        </span>
         <SegmentedControl
           label="Timeline width"
           value={fit ? 'fit' : 'scroll'}
@@ -73,7 +94,7 @@ export function CareGraphTab({ view }: { view: PatientView }) {
         />
         <span className="text-xs text-faint">{fit ? 'Day 0–14 at a glance; hover a task for its full name.' : 'Wider columns; scroll sideways inside the graph.'}</span>
       </div>
-      <Card padding="none" className="overflow-hidden">
+      <Card padding="none" className="overflow-hidden" data-tour="care-graph">
         <div
           ref={boxRef}
           className={fit ? 'overflow-hidden' : 'overflow-x-auto'}
@@ -149,16 +170,18 @@ export function CareGraphTab({ view }: { view: PatientView }) {
                       onClick={() => setOpenTask(n.task)}
                       aria-label={`${n.task.label}, due Day ${n.task.deadlineDay}, ${status.toLowerCase()}`}
                       className={cn(
-                        'flex w-full items-center gap-1 rounded-full border text-left font-medium',
-                        compact ? 'px-1.5 text-[11px]' : 'px-2 text-xs',
+                        'flex w-full border text-left font-medium',
+                        compact ? 'flex-col justify-center gap-0.5 rounded-lg px-1.5 text-[10px] leading-none' : 'items-center gap-1 rounded-full px-2 text-xs',
                         'transition-[filter,transform] duration-150 ease-out hover:brightness-125 active:scale-[0.98] motion-reduce:active:scale-100',
                         focusRing,
                         nodeClasses(status, n.task.risk),
                       )}
                       style={{ width: n.width, height: n.height }}
                     >
-                      <StatusGlyph status={status} />
-                      <span className={cn('truncate', status === 'CLOSED' && 'line-through decoration-faint')}>{shortTaskLabel(n.task, patient)}</span>
+                      {compact ? <ActionGlyph type={n.task.type} size={11} /> : <StatusGlyph status={status} />}
+                      <span className={cn('max-w-full truncate', compact && 'pb-px', status === 'CLOSED' && 'line-through decoration-faint')}>
+                        {compact ? entityLabel(n.task, patient) : shortTaskLabel(n.task, patient)}
+                      </span>
                     </button>
                   </Tooltip>
                 </div>
@@ -185,6 +208,18 @@ export function CareGraphTab({ view }: { view: PatientView }) {
         </span>
         <span className="ms-auto text-faint">Click a task for details and evidence.</span>
       </div>
+      {compact && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted" aria-label="Task icons">
+          {(Object.keys(ACTION_ICON) as TaskType[])
+            .filter((t) => tasks.some((x) => x.type === t))
+            .map((t) => (
+              <span key={t} className="inline-flex items-center gap-1.5">
+                <ActionGlyph type={t} />
+                {ACTION_ICON[t].label}
+              </span>
+            ))}
+        </div>
+      )}
 
       <Drawer
         open={!!openTask}
@@ -255,7 +290,6 @@ export function CareGraphTab({ view }: { view: PatientView }) {
                 </ul>
               )}
             </div>
-            <p className="text-xs text-faint">Task {openTask.id}</p>
           </div>
         )}
       </Drawer>

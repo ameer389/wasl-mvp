@@ -63,6 +63,10 @@ const VIEWS = [
   { name: 'slide-10-patient-done', hash: '/patient/demo-001/checkin', width: 1440, height: 900, slide: true, before: toDone, wait: 1200 },
   { name: 'slide-11-patient-meds', hash: '/patient/demo-001/meds', width: 1440, height: 900, slide: true },
   { name: 'slide-12-care-graph-fit-demo-001', hash: '/clinician/patient/demo-001?tab=care-graph', width: 1440, height: 900, slide: true },
+  { name: 'slide-13-launcher-guided-demo', hash: '/', width: 1440, height: 900, slide: true },
+  { name: 'slide-17-validation-top', hash: '/validation', width: 1440, height: 900, slide: true },
+  { name: 'validation-full-page-1440', hash: '/validation', width: 1440, height: 900 },
+  { name: 'console-first-visit-hint-1280', hash: '/clinician', width: 1280, height: 800, firstVisit: true },
   // Overflow / regression checks
   { name: 'launcher-1440', hash: '/', width: 1440, height: 900 },
   { name: 'launcher-1280', hash: '/', width: 1280, height: 800 },
@@ -93,13 +97,15 @@ const report = (ok, label, extra = []) => {
   extra.forEach((line) => console.log(`      ${line}`));
 };
 
-async function newPage(width, height, mobile = false) {
+async function newPage(width, height, mobile = false, firstVisit = false) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: mobile ? 2 : 1,
     isMobile: mobile,
     hasTouch: mobile,
   });
+  // The first-visit day hint is shown once per browser; most checks start "after" it.
+  if (!firstVisit) await context.addInitScript(() => localStorage.setItem('wasl.ui.dayHintSeen', 'true'));
   const page = await context.newPage();
   const errors = [];
   page.on('console', (msg) => msg.type() === 'error' && errors.push(`console error: ${msg.text()}`));
@@ -108,7 +114,7 @@ async function newPage(width, height, mobile = false) {
 }
 
 for (const view of VIEWS) {
-  const { context, page, errors } = await newPage(view.width, view.height, Boolean(view.mobile));
+  const { context, page, errors } = await newPage(view.width, view.height, Boolean(view.mobile), Boolean(view.firstVisit));
   await page.goto(`${APP_URL}#${view.hash}`, { waitUntil: 'networkidle' });
   await page.evaluate(() => document.fonts.ready);
   if (view.before) await view.before(page);
@@ -311,6 +317,64 @@ const queueRows = async (page) => {
   await page.goto(`${APP_URL}#/clinician/patient/demo-001?tab=audit`, { waitUntil: 'networkidle' });
   const familyAudit = await visible(page.getByText('Family (patient app)'));
   report(q.includes('أبو محمد') && familyAudit && errors.length === 0, `family mode: «${q}», audited as family ${familyAudit}`, errors);
+  await context.close();
+}
+
+// ── Guided demo: full walkthrough ────────────────────────────────────────────
+{
+  const { context, page, errors } = await newPage(1440, 900);
+  await page.goto(`${APP_URL}#/`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Start the guided demo' }).click();
+  const panel = page.getByRole('complementary', { name: 'Guided demo' });
+  const EXPECT = [
+    { hash: '#/', target: 'launcher', day: null },
+    { hash: '#/clinician/new?sample=1', target: 'task-preview', day: 2, shot: 'slide-14-tour-step-2-plan-to-tasks' },
+    { hash: '#/clinician/patient/demo-001?tab=care-graph', target: 'care-graph', day: 2 },
+    { hash: '#/patient/demo-001/checkin', target: 'checkin', day: null },
+    { hash: '#/clinician', target: 'queue-top', day: 4, shot: 'slide-15-tour-step-5-queue' },
+    { hash: '#/clinician/patient/demo-001?gap=', target: 'gap-reasons', day: 4, shot: 'slide-16-tour-step-6-explains-itself' },
+    { hash: '#/clinician/patient/demo-001?gap=', target: 'gap-actions', day: 4 },
+    { hash: '#/validation', target: 'validation-summary', day: 4 },
+  ];
+  const problems = [];
+  for (let i = 0; i < EXPECT.length; i++) {
+    const e = EXPECT[i];
+    await panel.getByText(`Step ${i + 1} of 8`).waitFor();
+    const target = page.locator(`[data-tour="${e.target}"]`).first();
+    await target.waitFor({ state: 'visible', timeout: 8000 }).catch(() => problems.push(`step ${i + 1}: target ${e.target} not visible`));
+    await page.waitForTimeout(450); // let the highlight settle
+    const url = decodeURIComponent(page.url());
+    if (!url.includes(e.hash)) problems.push(`step ${i + 1}: at ${url.split('#')[1]}, expected ${e.hash}`);
+    if (e.day !== null && (await dayOf(page)) !== e.day) problems.push(`step ${i + 1}: day ${await dayOf(page)}, expected ${e.day}`);
+    const [a, b] = await Promise.all([panel.boundingBox(), target.boundingBox()]);
+    const overlap = a && b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    if (overlap) problems.push(`step ${i + 1}: panel covers the highlighted element`);
+    if (e.shot) await page.screenshot({ path: `${OUT}/${e.shot}.png` });
+    await panel.getByRole('button', { name: i === EXPECT.length - 1 ? 'Finish' : 'Next' }).click();
+  }
+  const closing = await visible(panel.getByText('That is WASL in 8 steps'));
+  await panel.getByRole('button', { name: 'Explore freely' }).click();
+  await page.waitForURL(/#\/clinician$/);
+  const gone = (await page.getByRole('complementary', { name: 'Guided demo' }).count()) === 0;
+  report(problems.length === 0 && closing && gone && errors.length === 0, `guided demo: 8 steps walked, closing card ${closing}, exits to the console ${gone}`, [...problems, ...errors]);
+  await context.close();
+}
+
+{
+  // Tour survives a reload and can be exited and resumed from the launcher.
+  const { context, page, errors } = await newPage(1440, 900);
+  await page.goto(`${APP_URL}#/`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Start the guided demo' }).click();
+  const panel = page.getByRole('complementary', { name: 'Guided demo' });
+  await panel.getByRole('button', { name: 'Next' }).click();
+  await panel.getByText('Step 2 of 8').waitFor();
+  await page.reload({ waitUntil: 'networkidle' });
+  const afterReload = await visible(panel.getByText('Step 2 of 8'));
+  await panel.getByRole('button', { name: 'Exit the guided demo' }).click();
+  await page.goto(`${APP_URL}#/`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Resume at step 2' }).click();
+  const resumed = await visible(panel.getByText('Step 2 of 8'));
+  report(afterReload && resumed && errors.length === 0, `guided demo: survives reload ${afterReload}, resumes at step 2 ${resumed}`, errors);
   await context.close();
 }
 

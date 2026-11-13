@@ -1,6 +1,6 @@
 import { FlaskConical, Plus, Save, Trash2, Wand2 } from 'lucide-react';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { RiskBadge } from '../../components/console/badges';
 import { DrugPicker } from '../../components/console/DrugPicker';
 import { Badge, Button, Card, Field, IconButton, inputClasses, selectClasses, textareaClasses, useToast } from '../../components/ui';
@@ -28,6 +28,7 @@ import { clinicianPatientPath } from '../../routes';
 import { useDemoStore } from '../../state/store';
 
 const ACTIONS: MedAction[] = ['NEW', 'CONTINUE', 'CHANGED', 'STOP'];
+const ACTION_LABEL: Record<MedAction, string> = { NEW: 'New', CONTINUE: 'Continue', CHANGED: 'Dose changed', STOP: 'Stop' };
 
 function Section({ title, description, children, action }: { title: string; description?: string; children: ReactNode; action?: ReactNode }) {
   return (
@@ -48,7 +49,9 @@ export default function NewDischarge() {
   const store = useDemoStore();
   const toast = useToast();
   const navigate = useNavigate();
-  const [form, setForm] = useState<PlanForm>(emptyForm);
+  const [params] = useSearchParams();
+  // ?sample=1 opens with the fictional sample case (used by the guided demo).
+  const [form, setForm] = useState<PlanForm>(() => (params.get('sample') ? sampleForm() : emptyForm()));
   const [submitted, setSubmitted] = useState(false);
 
   const errors = useMemo(() => validatePlanForm(form), [form]);
@@ -92,7 +95,7 @@ export default function NewDischarge() {
         <select value={m.action} onChange={(e) => setRow('meds', i, { action: e.target.value as MedAction })} className={selectClasses}>
           {ACTIONS.map((a) => (
             <option key={a} value={a}>
-              {a}
+              {ACTION_LABEL[a]}
             </option>
           ))}
         </select>
@@ -284,7 +287,7 @@ export default function NewDischarge() {
       </form>
 
       <aside aria-label="Care graph preview" className="min-w-0">
-        <Card className="flex flex-col gap-3 xl:sticky xl:top-0">
+        <Card className="flex flex-col gap-3 xl:sticky xl:top-0" data-tour="task-preview">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">Executable tasks</h2>
             <span className="ms-auto text-xs text-muted tabular-nums">{preview.tasks.length} tasks</span>

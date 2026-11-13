@@ -1,7 +1,7 @@
 import { CheckCircle2, ClipboardCheck, Phone } from 'lucide-react';
 import { forwardRef, useState } from 'react';
 import { claimOptionsFor, confirmationHint } from '../../../domain/claimOptions';
-import { GAP_TYPE_LABEL, ROUTE_LABEL, gapSubject } from '../../../domain/labels';
+import { GAP_TYPE_LABEL, ROUTE_LABEL, gapSubject, readableReason } from '../../../domain/labels';
 import type { CareTask, Evidence, EvidenceClaim, Gap, Patient } from '../../../domain/types';
 import { cn } from '../../../lib/cn';
 import { useDemoStore } from '../../../state/store';
@@ -83,21 +83,24 @@ export const GapCard = forwardRef<HTMLDivElement, GapCardProps>(function GapCard
         </span>
       </header>
 
-      <div>
-        <h4 className="mb-1 text-xs font-medium text-muted">Why WASL flagged this</h4>
-        <ul className="list-disc space-y-1 ps-4 text-sm text-ink-2 marker:text-faint">
-          {gap.reasons.map((r) => (
-            <li key={r}>{r}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {items.length > 0 ? items.map((e) => <EvidenceChip key={e.id} evidence={e} />) : <span className="text-xs text-faint">No evidence received for this task.</span>}
+      <div data-tour="gap-reasons" className="flex flex-col gap-3 rounded-lg">
+        <div>
+          <h4 className="mb-1 text-xs font-medium text-muted">Why WASL flagged this</h4>
+          <ul className="list-disc space-y-1 ps-4 text-sm text-ink-2 marker:text-faint">
+            {gap.reasons.map((r) => (
+              <li key={r} title={r}>
+                {readableReason(r)}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {items.length > 0 ? items.map((e) => <EvidenceChip key={e.id} evidence={e} />) : <span className="text-xs text-faint">No evidence received for this task.</span>}
+        </div>
       </div>
 
       {mode === 'idle' && (
-        <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+        <div data-tour="gap-actions" className="flex flex-wrap gap-2 rounded-lg border-t border-line pt-4">
           <Button size="sm" icon={<Phone size={14} aria-hidden="true" />} onClick={() => setMode('call')}>
             Log call
           </Button>

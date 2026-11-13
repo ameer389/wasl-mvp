@@ -2,7 +2,7 @@ import { MessageCircleQuestion, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { daysOpen, latestEvidence } from '../../../domain/metrics';
 import { useDemoStore, useQuestionPlan } from '../../../state/store';
-import { Card, EmptyState } from '../../ui';
+import { Card, EmptyState, InfoTip } from '../../ui';
 import { EvidenceItem } from '../evidence';
 import { GapCard } from './GapCard';
 import type { PatientView } from './types';
@@ -86,7 +86,14 @@ export function OverviewTab({ view, highlightGapId }: { view: PatientView; highl
         </Card>
 
         <Card className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold">Latest evidence</h3>
+          <h3 className="flex items-center gap-1 text-sm font-semibold">
+            Latest evidence
+            <InfoTip term="source" align="end" />
+            <span className="ms-auto inline-flex items-center gap-1 text-xs font-normal text-muted">
+              Confidence
+              <InfoTip term="confidence" align="end" />
+            </span>
+          </h3>
           {evidence.length === 0 ? (
             <p className="text-sm text-muted">Nothing received yet.</p>
           ) : (

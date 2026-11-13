@@ -27,6 +27,7 @@ export default function PatientShell() {
         <div
           dir="rtl"
           lang="ar"
+          data-tour="checkin"
           className={cn(
             'relative flex h-dvh w-full flex-col overflow-hidden bg-bg font-arabic text-lg',
             'sm:box-content sm:h-[min(844px,calc(100dvh-7.5rem))] sm:w-[390px] sm:rounded-[44px] sm:border-[12px] sm:border-[#010507]',

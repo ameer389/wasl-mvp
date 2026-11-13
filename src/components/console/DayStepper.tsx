@@ -1,8 +1,13 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { DAY_HINT } from '../../content/glossary';
+import { readStored, writeStored } from '../../lib/storage';
 import { useHotkey } from '../../hooks/useHotkey';
 import { cn } from '../../lib/cn';
 import { useSimulatedDay } from '../../state/simulatedDay';
-import { Kbd, Tooltip, interactive } from '../ui';
+import { Button, InfoTip, Kbd, Tooltip, interactive } from '../ui';
+
+const HINT_KEY = 'wasl.ui.dayHintSeen';
 
 const stepBtn = cn('flex h-full w-8 items-center justify-center text-muted hover:bg-surface-2 hover:text-ink', interactive);
 
@@ -11,10 +16,26 @@ export default function DayStepper() {
   const { day, totalDays, prev, next } = useSimulatedDay();
   useHotkey('[', prev);
   useHotkey(']', next);
+  const [hintOpen, setHintOpen] = useState(() => !readStored(HINT_KEY, false));
+  const closeHint = () => {
+    writeStored(HINT_KEY, true);
+    setHintOpen(false);
+  };
 
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <span className="hidden text-xs text-faint xl:inline">Simulated</span>
+    <div className="relative flex shrink-0 items-center gap-2">
+      <span className="hidden items-center gap-1 text-xs text-faint xl:inline-flex">
+        Simulated
+        <InfoTip term="simulated" align="end" />
+      </span>
+      {hintOpen && (
+        <div role="note" className="absolute top-full right-0 z-40 mt-2 flex w-72 flex-col gap-2 rounded-xl border border-line-strong bg-surface-3 p-3 text-xs text-ink shadow-pop">
+          <p className="leading-relaxed">{DAY_HINT}</p>
+          <Button size="sm" variant="primary" className="self-end" onClick={closeHint}>
+            Got it
+          </Button>
+        </div>
+      )}
       <div
         role="group"
         aria-label="Simulated day since discharge"
@@ -35,7 +56,7 @@ export default function DayStepper() {
         <span
           aria-live="polite"
           className="flex items-center border-x border-line px-3 text-xs whitespace-nowrap tabular-nums"
-          title="Simulated clock — not real time"
+          title={DAY_HINT}
         >
           <span className="text-muted">Day&nbsp;</span>
           <span className="font-semibold text-ink">{day}</span>

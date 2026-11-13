@@ -3,6 +3,7 @@ export { Button, buttonClasses, type ButtonSize, type ButtonVariant } from './Bu
 export { Card, cardClasses } from './Card';
 export { EmptyState } from './EmptyState';
 export { IconButton } from './IconButton';
+export { InfoTip } from './InfoTip';
 export { Kbd } from './Kbd';
 export { StatCard } from './StatCard';
 export { Tabs, type TabItem } from './Tabs';

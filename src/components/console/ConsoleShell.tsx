@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { ToastProvider } from '../ui';
+import PageIntro from './PageIntro';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
@@ -14,6 +15,7 @@ export default function ConsoleShell() {
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar />
+          <PageIntro />
           <main id="main" className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
             <Outlet />
           </main>

@@ -95,6 +95,14 @@ tests/ (vitest)
 - **Voice:** `useSpeechRecognition` uses ar-SA with interim results and 3 alternatives; the best alternative is the one the parser understands best. If voice is unsupported or errors, a friendly Arabic message appears and the buttons stay available.
 - **Settings:** family mode is remembered per patient in browser storage (`wasl.ui.familyMode.<id>`). `Drug.brandAr` is display-only; the parser's name index is unchanged.
 
+## Guided demo, clarity and validation (Phase 6, follow in later phases)
+- **Guided demo:** steps and reducer are in src/domain/tour.ts (8 steps, the story of Abu Mohammed; also the demo-video script). Tour state lives in the store (`state.tour`, `store.tour(event)`), so it survives navigation and reloads. START resets to the seed at Day 2; each step carries its own simulated day. `TourPanel` (rendered once in App) navigates on step change, rings the element with the step's `data-tour` attribute, and sits in the first corner that does not cover it. Add `data-tour="…"` to any element a step should point at.
+- **Explanations are data** in src/content/glossary.ts: `GLOSSARY` (shown by `<InfoTip term="…">`), `PAGE_INTRO` (one line per console route, dismissible, remembered) and the day-stepper hint. Every new console page needs a `PAGE_INTRO` line.
+- **Plain words in the UI, technical names in code and tooltips.** Engine reasons stay technical; show them through `readableReason()`. Use `entityLabel()` for compact pills.
+- **Validation:** `npm run validate` writes validation/results.json (read by /validation) and validation/RESULTS.md. It is deterministic and exits non-zero if a gap is missed, a false positive appears or a safety invariant fails. Scenarios come from validation/scenarios.ts (seed 20261114). Parser numbers are reused from parser-results.json and never re-tuned.
+- **External check:** put real answers in validation/external-utterances.json, run `npm run eval:external` ONCE with the parser frozen, then `npm run validate`.
+- **Honesty rules for numbers:** RESULTS.md starts with the fixed disclaimer. The question-reduction and minutes-saved figures compare against a full script asked every day, which is an assumption and an upper bound. Never present them as measured savings.
+
 ## Build phases
 1 Setup & shell · 2 Domain core + tests · 3 Saudi-dialect parser + dataset · 4 Clinician dashboard · 5 Patient check-in (voice) · 6 Validation suite · 7 README + deploy.
 Work only on the phase you are asked for.

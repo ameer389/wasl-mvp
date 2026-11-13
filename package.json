@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:views": "node scripts/check-views.mjs",
-    "eval:parser": "tsx scripts/eval-parser.ts"
+    "eval:parser": "tsx scripts/eval-parser.ts",
+    "validate": "tsx scripts/validate.ts",
+    "eval:external": "tsx scripts/eval-external.ts"
   },
   "dependencies": {
     "lucide-react": "^1.72.0",

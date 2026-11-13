@@ -4,6 +4,7 @@ import { CLAIM_LABEL, OWNER_LABEL } from '../../../domain/labels';
 import { LANES, laneOf } from '../../../domain/graphLayout';
 import type { CareTask, Evidence, TaskStatus } from '../../../domain/types';
 import { cn } from '../../../lib/cn';
+import { InfoTip } from '../../ui';
 import { StatusBadge } from '../badges';
 import { ArabicQuote, SourceIcon } from '../evidence';
 import type { PatientView } from './types';
@@ -66,7 +67,10 @@ export function ExpectedActualTab({ view }: { view: PatientView }) {
                 Expected
               </th>
               <th scope="col" className="px-4 py-2 font-medium">
-                Actual (latest evidence)
+                <span className="inline-flex items-center gap-1">
+                  Actual (latest evidence)
+                  <InfoTip term="confidence" />
+                </span>
               </th>
               <th scope="col" className="px-4 py-2 font-medium">
                 Status

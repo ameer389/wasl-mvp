@@ -2,8 +2,8 @@ import { BellRing, ChevronDown, ChevronRight, FilePlus2, Search, ShieldCheck, Sl
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { RiskBadge, TransferChip } from '../../components/console/badges';
-import { Button, EmptyState, Kbd, SegmentedControl, StatCard, buttonClasses, compactControlClasses, focusRing } from '../../components/ui';
-import { GAP_TYPE_LABEL, ROUTE_LABEL, gapSubject } from '../../domain/labels';
+import { Button, EmptyState, InfoTip, Kbd, SegmentedControl, StatCard, buttonClasses, compactControlClasses, focusRing } from '../../components/ui';
+import { GAP_TYPE_LABEL, ROUTE_LABEL, gapSubject, readableReason } from '../../domain/labels';
 import { addSummaries, daysOpen, questionSavings, verificationSummary } from '../../domain/metrics';
 import { DEFAULT_FILTERS, buildQueueRows, filterGaps, isDefaultFilters, type QueueFilters, type QueueRow } from '../../domain/queue';
 import type { Gap, GapType, Patient } from '../../domain/types';
@@ -122,8 +122,9 @@ export default function CareGaps() {
 
       <section aria-labelledby="queue-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 id="queue-title" className="text-sm font-semibold">
-            Gap queue
+          <h2 id="queue-title" className="flex items-center gap-1 text-sm font-semibold">
+            Care gaps to review
+            <InfoTip term="gap" />
           </h2>
           <span className="text-xs text-muted tabular-nums" aria-live="polite">
             {filtered.length} {filtered.length === 1 ? 'gap' : 'gaps'}
@@ -204,12 +205,15 @@ export default function CareGaps() {
           />
         ) : (
           <div className="overflow-hidden rounded-xl border border-line bg-surface-1 shadow-card">
-            <div className={cn(GRID, 'border-b border-line px-4 py-2 text-xs font-medium text-faint')} aria-hidden="true">
+            <div className={cn(GRID, 'border-b border-line px-4 py-2 text-xs font-medium text-faint')}>
               <span>Risk</span>
               <span>Patient</span>
-              <span>Gap</span>
+              <span>What is different from the plan</span>
               <span>Open</span>
-              <span>Route</span>
+              <span className="inline-flex items-center gap-1">
+                Act
+                <InfoTip term="route" align="end" />
+              </span>
               <span className="text-right">Priority</span>
             </div>
             <ul ref={listRef} aria-label="Care gaps, highest priority first" className="divide-y divide-line">
@@ -225,7 +229,7 @@ export default function CareGaps() {
                 if (row.kind === 'gap') {
                   const { gap } = row;
                   return (
-                    <li key={row.key}>
+                    <li key={row.key} data-tour={i === 0 ? 'queue-top' : undefined}>
                       <Link ref={register} to={gapLink(gap)} onFocus={() => setSelected(i)} className={rowClass(i)}>
                         <RiskBadge risk={gap.risk} />
                         <PatientCell patient={patient} day={today} />
@@ -235,7 +239,7 @@ export default function CareGaps() {
                             <span className="truncate text-sm text-muted">{patient ? gapSubject(gap, tasks, patient) : ''}</span>
                           </div>
                           <p className="truncate text-xs text-faint" title={gap.reasons[0]}>
-                            {gap.reasons[0]}
+                            {readableReason(gap.reasons[0] ?? '')}
                           </p>
                         </div>
                         <span className="text-xs text-muted tabular-nums">{daysOpen(gap, today)}d</span>
