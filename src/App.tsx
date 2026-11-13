@@ -1,28 +1,47 @@
 import { Route, Routes } from 'react-router-dom';
-import Layout from './components/Layout';
+import ConsoleShell from './components/console/ConsoleShell';
+import PatientShell from './components/patient/PatientShell';
 import { ROUTES } from './routes';
-import Landing from './pages/Landing';
-import ClinicianQueue from './pages/ClinicianQueue';
-import PatientDetail from './pages/PatientDetail';
-import NewDischargePlan from './pages/NewDischargePlan';
-import PatientCheckin from './pages/PatientCheckin';
-import Validation from './pages/Validation';
-import About from './pages/About';
+import { SimulatedDayProvider } from './state/simulatedDay';
 import NotFound from './pages/NotFound';
+import RoleLauncher from './pages/RoleLauncher';
+import About from './pages/console/About';
+import CareGaps from './pages/console/CareGaps';
+import NewDischarge from './pages/console/NewDischarge';
+import PatientDetail from './pages/console/PatientDetail';
+import Patients from './pages/console/Patients';
+import Validation from './pages/console/Validation';
+import Appointments from './pages/patient/Appointments';
+import Help from './pages/patient/Help';
+import Meds from './pages/patient/Meds';
+import Today from './pages/patient/Today';
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path={ROUTES.landing} element={<Landing />} />
-        <Route path={ROUTES.clinicianQueue} element={<ClinicianQueue />} />
-        <Route path={ROUTES.clinicianNew} element={<NewDischargePlan />} />
-        <Route path={ROUTES.clinicianPatient} element={<PatientDetail />} />
-        <Route path={ROUTES.patientCheckin} element={<PatientCheckin />} />
-        <Route path={ROUTES.validation} element={<Validation />} />
-        <Route path={ROUTES.about} element={<About />} />
+    <SimulatedDayProvider>
+      <Routes>
+        <Route path={ROUTES.launcher} element={<RoleLauncher />} />
+
+        {/* Care team console — EN, LTR, desktop */}
+        <Route element={<ConsoleShell />}>
+          <Route path={ROUTES.careGaps} element={<CareGaps />} />
+          <Route path={ROUTES.patients} element={<Patients />} />
+          <Route path={ROUTES.newDischarge} element={<NewDischarge />} />
+          <Route path={ROUTES.clinicianPatient} element={<PatientDetail />} />
+          <Route path={ROUTES.validation} element={<Validation />} />
+          <Route path={ROUTES.about} element={<About />} />
+        </Route>
+
+        {/* Patient app — AR, RTL, mobile */}
+        <Route path={ROUTES.patientToday} element={<PatientShell />}>
+          <Route index element={<Today />} />
+          <Route path="meds" element={<Meds />} />
+          <Route path="appointments" element={<Appointments />} />
+          <Route path="help" element={<Help />} />
+        </Route>
+
         <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+      </Routes>
+    </SimulatedDayProvider>
   );
 }

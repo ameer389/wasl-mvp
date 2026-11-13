@@ -1,13 +1,23 @@
+import { Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import PagePlaceholder from '../components/PagePlaceholder';
+import DemoBadge from '../components/DemoBadge';
+import { EmptyState, buttonClasses } from '../components/ui';
 import { ROUTES } from '../routes';
 
 export default function NotFound() {
   return (
-    <PagePlaceholder title="Page not found" description="This page does not exist in the WASL demo.">
-      <Link to={ROUTES.landing} className="text-accent underline-offset-4 hover:underline">
-        Back to start
-      </Link>
-    </PagePlaceholder>
+    <div lang="en" className="flex min-h-dvh flex-col items-center justify-center gap-6 px-4">
+      <EmptyState
+        icon={Compass}
+        title="Page not found"
+        text="This page doesn't exist in the WASL demo."
+        action={
+          <Link to={ROUTES.launcher} className={buttonClasses({ variant: 'primary', size: 'sm' })}>
+            Choose an app
+          </Link>
+        }
+      />
+      <DemoBadge />
+    </div>
   );
 }
