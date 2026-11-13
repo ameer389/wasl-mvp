@@ -26,4 +26,7 @@ Thumbs.db
 desktop.ini
 
 # visual check output
-screenshots/
+/screenshots/
+
+# Keep documentation screenshots (only the root-level folder above is ignored)
+!docs/screenshots/
