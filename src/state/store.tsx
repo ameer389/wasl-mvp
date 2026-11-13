@@ -3,6 +3,7 @@
  * Domain logic lives in src/domain; this file only wires it to React.
  */
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
+import { targetsPatient } from '../domain/auditTrail';
 import type { QuestionPlan } from '../domain/questionPlanner';
 import type { CareTask, Day, Evidence, EvidenceClaim, Patient, ResolutionAction } from '../domain/types';
 import type { DemoState } from './demoState';
@@ -29,6 +30,9 @@ interface DemoStore {
   confirmTask: (patientId: string, taskId: string, claim: EvidenceClaim, note?: string) => void;
   resolveGap: (gapId: string, action: ResolutionAction, note?: string, by?: string) => void;
   addPatient: (patient: Patient, by?: string) => void;
+  /** Save one check-in answer (evidence + one audit entry). */
+  recordAnswer: (patientId: string, evidence: Evidence[], meta: { actor: string; target: string; note: string }) => void;
+  completeCheckin: (patientId: string, actor: string, note: string) => void;
   reset: () => void;
   replace: (state: DemoState) => void;
 }
@@ -95,6 +99,8 @@ export function DemoStoreProvider({ children, initialState }: { children: ReactN
           patientDay: patientToday(gapId.split(':')[0] ?? ''),
         }),
       addPatient: (patient, by = DEMO_CLINICIAN) => dispatch({ type: 'ADD_PATIENT', patient, by, at: now() }),
+      recordAnswer: (patientId, evidence, meta) => dispatch({ type: 'RECORD_ANSWER', patientId, evidence, ...meta, at: now() }),
+      completeCheckin: (patientId, actor, note) => dispatch({ type: 'COMPLETE_CHECKIN', patientId, actor, note, at: now() }),
       reset: () => dispatch({ type: 'RESET' }),
       replace: (s) => dispatch({ type: 'REPLACE', state: s }),
     };
@@ -112,6 +118,19 @@ export function useDemoStore(): DemoStore {
 export function usePatient(id: string | undefined): Patient | undefined {
   const { state } = useDemoStore();
   return id ? state.patients.find((p) => p.id === id) : undefined;
+}
+
+/** Today's check-in progress for a patient (from the audit log, at the current simulated day). */
+export function useCheckinToday(patientId: string | undefined): { answered: number; completed: boolean } {
+  const { state } = useDemoStore();
+  return useMemo(() => {
+    if (!patientId) return { answered: 0, completed: false };
+    const today = state.audit.filter((a) => targetsPatient(a.target, patientId) && a.day === state.simulatedDay);
+    return {
+      answered: today.filter((a) => a.action === 'CHECKIN_ANSWER').length,
+      completed: today.some((a) => a.action === 'CHECKIN_COMPLETED' && a.target === patientId),
+    };
+  }, [patientId, state.audit, state.simulatedDay]);
 }
 
 /** Today's adaptive check-in questions for one patient (on the patient's own timeline). */

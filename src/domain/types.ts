@@ -187,7 +187,9 @@ export type AuditAction =
   | 'EVIDENCE_ADDED'
   | 'GAP_CALLED'
   | 'GAP_CONFIRMED'
-  | 'GAP_RESOLVED';
+  | 'GAP_RESOLVED'
+  | 'CHECKIN_ANSWER'
+  | 'CHECKIN_COMPLETED';
 
 export interface AuditEntry {
   id: string;
@@ -220,8 +222,18 @@ export interface Question {
   kind: QuestionKind;
   /** Simple Saudi dialect. */
   textAr: string;
+  /** Same question asked of a family member, in the third person with the patient's name. */
+  familyTextAr: string;
   /** English gloss for the care team (not shown to the patient). */
   textEn: string;
   /** The evidence claim a "yes" answer maps to. */
   expects: EvidenceClaim;
+  /** Medicine the question is about (resolves shared informal names when parsing). */
+  drugId?: string;
+  /** How patients say the medicine («حبة السيولة»). */
+  medNameAr?: string;
+  /** Small line under the question: «مكتوب على العلبة: إليكويس (أبيكسابان)». */
+  helperAr?: string;
+  /** DOSE_CHECK only: the new dose exactly as written in the plan. */
+  doseAsWritten?: string;
 }

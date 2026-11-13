@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildCareGraph } from '../../src/domain/careGraph';
 import { evaluate } from '../../src/domain/gapEngine';
-import { MAX_TASK_QUESTIONS, OPEN_MEDS_TEXT, planQuestions, spokenDrugName } from '../../src/domain/questionPlanner';
+import { MAX_TASK_QUESTIONS, OPEN_MEDS_TEXT, planQuestions } from '../../src/domain/questionPlanner';
 import type { Evidence, Patient } from '../../src/domain/types';
 import { SAMPLE_EVIDENCE, SAMPLE_PATIENTS } from '../../src/data/samplePatients';
 import { ev, makePatient, T } from './fixtures';
@@ -64,11 +64,39 @@ describe('planQuestions', () => {
     expect(taskIds(plan(feeds, 4, p).questions)).not.toContain(T.cbc);
   });
 
-  it('uses an unambiguous spoken name for medicines that share an informal name', () => {
-    const p = SAMPLE_PATIENTS[0] as Patient; // apixaban + clopidogrel + aspirin all "مسيل الدم"
-    expect(spokenDrugName('clopidogrel', p)).toBe('كلوبيدوقريل (بلافكس)');
-    expect(spokenDrugName('apixaban', p)).toBe('أبيكسابان (إليكويس)');
-    expect(spokenDrugName('aspirin', p)).toBe('أسبرين (أسبوسيد)'); // skips «الأسبرين» (same as generic)
+  it('names medicines the way patients say them, with the written name on a helper line', () => {
+    const p = SAMPLE_PATIENTS[0] as Patient; // demo-001
+    const tasks = buildCareGraph(p);
+    const { taskStatus } = evaluate(p, tasks, [], [], 0);
+    const [start, stop] = planQuestions(p, tasks, [], taskStatus, 0).questions;
+    expect(start).toMatchObject({
+      kind: 'MED_START',
+      textAr: 'بديت حبة السيولة الجديدة؟',
+      helperAr: 'مكتوب على العلبة: إليكويس (أبيكسابان)',
+      familyTextAr: 'بدأ أبو محمد حبة السيولة الجديدة؟',
+      drugId: 'apixaban',
+    });
+    expect(stop).toMatchObject({ kind: 'STOPPED_CHECK', textAr: 'وقّفت بلافكس زي ما قال لك الدكتور؟', helperAr: 'مكتوب على العلبة: بلافكس (كلوبيدوقريل)' });
+    // no doses in patient questions
+    for (const q of [start, stop]) expect(q?.textAr).not.toMatch(/\d|mg/);
+  });
+
+  it('only the dose-change question carries the dose, exactly as written in the plan', () => {
+    const p = SAMPLE_PATIENTS[2] as Patient; // demo-003 insulin CHANGED
+    const tasks = buildCareGraph(p);
+    const { taskStatus } = evaluate(p, tasks, [], [], 0);
+    const dose = planQuestions(p, tasks, [], taskStatus, 0).questions.find((q) => q.kind === 'DOSE_CHECK');
+    expect(dose).toMatchObject({ textAr: 'تاخذ إبرة السكر على الجرعة الجديدة اللي في ورقة الخروج؟', doseAsWritten: '14 units at bedtime' });
+    expect(dose?.textAr).not.toMatch(/\d/);
+  });
+
+  it('uses feminine forms for female patients and third person for family', () => {
+    const p = SAMPLE_PATIENTS[3] as Patient; // demo-004 Umm Sarah, furosemide NEW
+    const tasks = buildCareGraph(p);
+    const { taskStatus } = evaluate(p, tasks, [], [], 0);
+    const [first] = planQuestions(p, tasks, [], taskStatus, 0).questions;
+    expect(first?.textAr).toBe('بديتي حبة المويه الجديدة؟');
+    expect(first?.familyTextAr).toBe('بدأت أم سارة حبة المويه الجديدة؟');
   });
 
   it('baseline is never shorter than the adaptive plan (all samples, all days)', () => {

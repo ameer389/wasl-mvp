@@ -83,6 +83,18 @@ tests/ (vitest)
 - **Styling:** cn() does not de-duplicate Tailwind classes. Use `controlClasses` plus your own sizes, or `compactControlClasses`, instead of overriding the sizes inside `inputClasses`.
 - **Slide screenshots:** `npm run check:views` (dev server running) writes `screenshots/slide-*.png` at 1440×900, Day 4, and runs the queue, resolve, confirm, new-discharge and care-graph drawer interactions.
 
+## Patient check-in (Phase 5, follow in later phases)
+- **Flow:** `/patient/:id/checkin`. The state machine is `checkinReducer` in src/domain/checkin.ts (pure and tested); the page only performs side effects. Questions are snapshotted at the start, so the live plan shrinking doesn't move them.
+- **One path to evidence for every answer:** a button (via `quickParse`, confidence 0.95), typed text or voice → `ParseResult` → `evidenceForAnswer` (uses `answerToEvidence` / `toEvidenceClaim`) → `store.recordAnswer`, which writes the evidence and exactly ONE `CHECKIN_ANSWER` audit entry. Source: `patient_voice`, `patient_app`, or `family` in family mode. Day = `patientToday`.
+- **Low confidence:** UNSURE, UNKNOWN and anything below 0.7 is still saved as answered, never trusted. The engine raises LOW_CONFIDENCE and the patient sees «بنخلي الممرضة تتأكد منك».
+- **Phrasing** lives in src/domain/patientPhrasing.ts:
+  - The informal medicine name comes first; the helper line reads «مكتوب على العلبة: {brandAr} ({nameAr})».
+  - Forms are gendered by the patient's sex, and family mode uses the third person with the patient's name.
+  - No doses, except the DOSE_CHECK helper, which shows the plan's dose exactly as written.
+  - The patient is never told to take, stop or change anything.
+- **Voice:** `useSpeechRecognition` uses ar-SA with interim results and 3 alternatives; the best alternative is the one the parser understands best. If voice is unsupported or errors, a friendly Arabic message appears and the buttons stay available.
+- **Settings:** family mode is remembered per patient in browser storage (`wasl.ui.familyMode.<id>`). `Drug.brandAr` is display-only; the parser's name index is unchanged.
+
 ## Build phases
 1 Setup & shell · 2 Domain core + tests · 3 Saudi-dialect parser + dataset · 4 Clinician dashboard · 5 Patient check-in (voice) · 6 Validation suite · 7 README + deploy.
 Work only on the phase you are asked for.

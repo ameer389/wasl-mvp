@@ -14,6 +14,35 @@ import { chromium } from 'playwright-core';
 const APP_URL = process.env.APP_URL ?? 'http://localhost:5173/wasl-mvp/';
 const OUT = 'screenshots';
 const STOP_GAP = 'demo-001:STOPPED_STILL_TAKEN:demo-001/MED_STOP/clopidogrel@d1';
+/** Patient check-in helpers (typed answers: headless Chrome has no microphone). */
+const startCheckin = async (page) => {
+  await page.getByRole('button', { name: 'ابدأ' }).click();
+  await page.getByText(/سؤال ١ من/).waitFor();
+};
+const typeAnswer = async (page, text) => {
+  await page.getByRole('button', { name: 'أو اكتب جوابك' }).click();
+  await page.getByLabel('جوابك').fill(text);
+  await page.getByRole('button', { name: 'أرسل' }).click();
+};
+const answerAndConfirm = async (page, text) => {
+  await typeAnswer(page, text);
+  await page.getByRole('button', { name: 'إيه صح' }).click();
+  await page.getByRole('status').getByText('تم', { exact: true }).waitFor();
+};
+const toEcho = async (page) => {
+  await startCheckin(page);
+  await typeAnswer(page, 'ايه بديتها الحمدلله');
+  await page.getByText(/فهمت إنك/).waitFor();
+};
+const toDone = async (page) => {
+  await startCheckin(page);
+  await answerAndConfirm(page, 'ايه بديتها الحمدلله');
+  await page.getByText(/سؤال ٢ من/).waitFor();
+  await page.getByRole('button', { name: 'إيه', exact: true }).click();
+  await page.getByText(/سؤال ٣ من/).waitFor();
+  await page.getByRole('button', { name: 'لا، بس أدوية الدكتور' }).click();
+  await page.getByText('شكراً، خلّصنا ✔').waitFor();
+};
 const loadSample = async (page) => {
   await page.getByRole('button', { name: 'Load sample case' }).click();
   await page.getByText('Executable tasks').waitFor();
@@ -28,6 +57,12 @@ const VIEWS = [
   { name: 'slide-4-expected-vs-actual-demo-002', hash: '/clinician/patient/demo-002?tab=expected', width: 1440, height: 900, slide: true },
   { name: 'slide-5-new-discharge-sample', hash: '/clinician/new', width: 1440, height: 900, slide: true, before: loadSample },
   { name: 'slide-6-patients-list', hash: '/clinician/patients', width: 1440, height: 900, slide: true },
+  { name: 'slide-7-patient-today', hash: '/patient/demo-001', width: 1440, height: 900, slide: true },
+  { name: 'slide-8-patient-question', hash: '/patient/demo-001/checkin', width: 1440, height: 900, slide: true, before: startCheckin },
+  { name: 'slide-9-patient-echo', hash: '/patient/demo-001/checkin', width: 1440, height: 900, slide: true, before: toEcho },
+  { name: 'slide-10-patient-done', hash: '/patient/demo-001/checkin', width: 1440, height: 900, slide: true, before: toDone, wait: 1200 },
+  { name: 'slide-11-patient-meds', hash: '/patient/demo-001/meds', width: 1440, height: 900, slide: true },
+  { name: 'slide-12-care-graph-fit-demo-001', hash: '/clinician/patient/demo-001?tab=care-graph', width: 1440, height: 900, slide: true },
   // Overflow / regression checks
   { name: 'launcher-1440', hash: '/', width: 1440, height: 900 },
   { name: 'launcher-1280', hash: '/', width: 1280, height: 800 },
@@ -42,6 +77,10 @@ const VIEWS = [
   { name: 'console-about-1280', hash: '/about', width: 1280, height: 800 },
   { name: 'console-unknown-patient-1280', hash: '/clinician/patient/nobody', width: 1280, height: 800 },
   { name: 'patient-mobile-390', hash: '/patient/demo-001', width: 390, height: 844, mobile: true },
+  { name: 'patient-checkin-mobile-390', hash: '/patient/demo-001/checkin', width: 390, height: 844, mobile: true, before: startCheckin },
+  { name: 'patient-appointments-mobile-390', hash: '/patient/demo-001/appointments', width: 390, height: 844, mobile: true },
+  { name: 'patient-help-mobile-390', hash: '/patient/demo-004/help', width: 390, height: 844, mobile: true },
+  { name: 'console-care-graph-fit-1280', hash: '/clinician/patient/demo-001?tab=care-graph', width: 1280, height: 800 },
   { name: 'patient-frame-1440', hash: '/patient/demo-001', width: 1440, height: 1000 },
 ];
 
@@ -202,6 +241,76 @@ const dayOf = async (page) =>
   await page.keyboard.press('Escape');
   const closed = (await page.getByRole('dialog').count()) === 0;
   report(open && provenance && closed && errors.length === 0, `care graph drawer: open ${open}, provenance ${provenance}, Escape closes ${closed}`, errors);
+  await context.close();
+}
+
+// ── Patient check-in → console (end to end, typed answers) ──────────────────
+const queueRows = async (page) => {
+  await page.goto(`${APP_URL}#/clinician`, { waitUntil: 'networkidle' });
+  const list = page.getByRole('list', { name: /Care gaps/ });
+  await list.waitFor();
+  return list.locator(':scope > li').allInnerTexts();
+};
+
+{
+  // 1. Abu Abdullah says he has not started amlodipine → NOT_STARTED replaces NO_RESPONSE for that task.
+  const { context, page, errors } = await newPage(1440, 900);
+  await page.goto(`${APP_URL}#/patient/demo-005/checkin`, { waitUntil: 'networkidle' });
+  await startCheckin(page);
+  const question = await page.getByRole('heading', { level: 1 }).innerText();
+  await answerAndConfirm(page, 'لا والله ما بديتها');
+  const rows = await queueRows(page);
+  const notStarted = rows.some((r) => r.includes('Abu Abdullah') && r.includes('New medicine not started') && r.includes('Start Amlodipine'));
+  const noResponseForIt = rows.some((r) => r.includes('Abu Abdullah') && r.includes('No response') && r.includes('Start Amlodipine'));
+  report(notStarted && !noResponseForIt && errors.length === 0, `E2E 1 demo-005 «${question}» → «لا والله ما بديتها»: NOT_STARTED ${notStarted}, NO_RESPONSE for that task gone ${!noResponseForIt}`, errors);
+  await context.close();
+}
+
+{
+  // 2. Abu Mohammed confirms he started apixaban → LOW_CONFIDENCE closes, task VERIFIED.
+  const { context, page, errors } = await newPage(1440, 900);
+  await page.goto(`${APP_URL}#/patient/demo-001/checkin`, { waitUntil: 'networkidle' });
+  await startCheckin(page);
+  await answerAndConfirm(page, 'ايه بديتها الحمدلله');
+  await page.goto(`${APP_URL}#/clinician/patient/demo-001`, { waitUntil: 'networkidle' });
+  await page.getByRole('heading', { name: 'Stopped medicine still being taken' }).waitFor();
+  const lowConf = await page.getByRole('heading', { name: 'Low-confidence answer: needs a human' }).count();
+  await page.goto(`${APP_URL}#/clinician/patient/demo-001?tab=expected`, { waitUntil: 'networkidle' });
+  const row = page.getByRole('row', { name: /Start Apixaban/ });
+  await row.waitFor();
+  const verified = (await row.innerText()).includes('Verified');
+  report(lowConf === 0 && verified && errors.length === 0, `E2E 2 demo-001 «ايه بديتها الحمدلله»: LOW_CONFIDENCE closed ${lowConf === 0}, task Verified ${verified}`, errors);
+  await context.close();
+}
+
+{
+  // 3. A vague typed answer is saved with low confidence → LOW_CONFIDENCE appears for a human.
+  const { context, page, errors } = await newPage(1440, 900);
+  await page.goto(`${APP_URL}#/patient/demo-005/checkin`, { waitUntil: 'networkidle' });
+  await startCheckin(page);
+  await typeAnswer(page, 'يمكن، ما ادري');
+  const nurse = await visible(page.getByText('بنخلي الممرضة تتأكد منك'));
+  await page.getByRole('button', { name: 'إيه صح' }).click();
+  await page.getByRole('status').getByText('تم', { exact: true }).waitFor();
+  const rows = await queueRows(page);
+  const low = rows.some((r) => r.includes('Abu Abdullah') && r.includes('Low-confidence answer') && r.includes('Start Amlodipine'));
+  report(nurse && low && errors.length === 0, `E2E 3 demo-005 «يمكن، ما ادري»: nurse message ${nurse}, LOW_CONFIDENCE in queue ${low}`, errors);
+  await context.close();
+}
+
+{
+  // Family mode: third-person questions, remembered per patient, evidence recorded as family.
+  const { context, page, errors } = await newPage(1440, 900);
+  await page.goto(`${APP_URL}#/patient/demo-001`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'أنا من أهل المريض' }).click();
+  await page.goto(`${APP_URL}#/patient/demo-001/checkin`, { waitUntil: 'networkidle' });
+  await startCheckin(page);
+  const q = await page.getByRole('heading', { level: 1 }).innerText();
+  await answerAndConfirm(page, 'ايه بدأ فيها');
+  await page.goto(`${APP_URL}#/clinician/patient/demo-001?tab=audit`, { waitUntil: 'networkidle' });
+  const familyAudit = await visible(page.getByText('Family (patient app)'));
+  report(q.includes('أبو محمد') && familyAudit && errors.length === 0, `family mode: «${q}», audited as family ${familyAudit}`, errors);
   await context.close();
 }
 

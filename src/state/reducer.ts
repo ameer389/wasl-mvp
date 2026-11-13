@@ -21,6 +21,9 @@ export type DemoAction =
       patientDay?: number;
     }
   | { type: 'ADD_PATIENT'; patient: Patient; by: string; at: string }
+  /** One check-in answer: all its evidence plus exactly one audit entry. */
+  | { type: 'RECORD_ANSWER'; patientId: string; evidence: Evidence[]; actor: string; target: string; note: string; at: string }
+  | { type: 'COMPLETE_CHECKIN'; patientId: string; actor: string; note: string; at: string }
   | { type: 'RESET' }
   | { type: 'REPLACE'; state: DemoState };
 
@@ -78,6 +81,19 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         ...state,
         patients: [...state.patients, action.patient],
         audit: appendAudit(state, { actor: action.by, action: 'PATIENT_ADDED', target: action.patient.id, at: action.at }),
+      };
+
+    case 'RECORD_ANSWER':
+      return {
+        ...state,
+        evidence: [...state.evidence, ...action.evidence],
+        audit: appendAudit(state, { actor: action.actor, action: 'CHECKIN_ANSWER', target: action.target, at: action.at, note: action.note }),
+      };
+
+    case 'COMPLETE_CHECKIN':
+      return {
+        ...state,
+        audit: appendAudit(state, { actor: action.actor, action: 'CHECKIN_COMPLETED', target: action.patientId, at: action.at, note: action.note }),
       };
 
     case 'RESET':

@@ -3,11 +3,13 @@
  * Picks the few check-in questions that still matter today, versus a baseline
  * phone-call script that asks about every patient-side task.
  */
-import { getDrug, requireDrug } from './drugs';
+import { getDrug } from './drugs';
 import { FEED_SOURCE_FOR, VERIFY_THRESHOLD } from './gapEngine';
+import { boxHelperAr, doseAsWritten, medNameAr, openMedsTextAr, questionTextAr } from './patientPhrasing';
 import type { CareTask, Day, Evidence, Patient, Question, Risk, TaskStatus } from './types';
 
 export const MAX_TASK_QUESTIONS = 5;
+/** Open question, patient voice (male form; see openMedsTextAr for others). */
 export const OPEN_MEDS_TEXT = 'فيه أي دواء ثاني تاخذه ما ذكرناه؟';
 
 const RISK_ORDER: Record<Risk, number> = { high: 0, medium: 1, low: 2 };
@@ -20,48 +22,39 @@ export interface QuestionPlan {
   baseline: Question[];
 }
 
-/**
- * How the patient would name this medicine: Arabic generic name plus the first
- * informal name that no other medicine in the same plan shares (so «حبة السيولة»
- * never points at two different medicines).
- */
-export function spokenDrugName(drugId: string, patient: Patient): string {
-  const drug = requireDrug(drugId);
-  const others = patient.plan.meds.filter((m) => m.drugId !== drugId).map((m) => requireDrug(m.drugId));
-  const sameAsGeneric = (n: string) => n.replace(/^ال/, '') === drug.nameAr.replace(/^ال/, '');
-  const unique = drug.informalNamesAr.find((n) => !sameAsGeneric(n) && !others.some((o) => o.informalNamesAr.includes(n)));
-  return unique ? `${drug.nameAr} (${unique})` : drug.nameAr;
-}
+const KIND_FOR: Record<CareTask['type'], Question['kind']> = {
+  MED_START: 'MED_START',
+  MED_CONTINUE: 'MED_CONTINUE',
+  MED_DOSE_CHANGE: 'DOSE_CHECK',
+  MED_STOP: 'STOPPED_CHECK',
+  LAB_DONE: 'YES_NO',
+  FOLLOWUP_BOOKED: 'YES_NO',
+  FOLLOWUP_ATTENDED: 'YES_NO',
+  WOUND_CHECK: 'YES_NO',
+};
 
+/**
+ * One check-in question for a task. Medicines are named the way patients say
+ * them (informal name first) with the written name on a helper line.
+ */
 export function questionForTask(task: CareTask, patient: Patient): Question {
-  const id = `q:${task.id}`;
   const lab = patient.plan.labs.find((l) => l.id === task.refId);
   const fu = patient.plan.followUps.find((f) => f.id === task.refId);
-  const drug = getDrug(task.refId)?.generic.toLowerCase() ?? task.refId;
-  const base = { id, taskId: task.id, textEn: glossEn(task, drug, lab?.test, fu?.clinic) };
-  switch (task.type) {
-    case 'MED_START':
-      return { ...base, kind: 'MED_START', expects: 'DONE', textAr: `بديت الدواء الجديد ${spokenDrugName(task.refId, patient)}؟` };
-    case 'MED_CONTINUE':
-      return { ...base, kind: 'MED_CONTINUE', expects: 'DONE', textAr: `للحين مستمر على ${spokenDrugName(task.refId, patient)}؟` };
-    case 'MED_DOSE_CHANGE':
-      return {
-        ...base,
-        kind: 'DOSE_CHECK',
-        expects: 'DONE',
-        textAr: `تاخذ ${spokenDrugName(task.refId, patient)} على الجرعة الجديدة اللي في ورقة الخروج؟`,
-      };
-    case 'MED_STOP':
-      return { ...base, kind: 'STOPPED_CHECK', expects: 'STOPPED', textAr: `وقّفت ${spokenDrugName(task.refId, patient)} زي ما قال لك الدكتور؟` };
-    case 'LAB_DONE':
-      return { ...base, kind: 'YES_NO', expects: 'DONE', textAr: `سوّيت تحليل ${lab?.testAr ?? lab?.test ?? 'المختبر'}؟` };
-    case 'FOLLOWUP_BOOKED':
-      return { ...base, kind: 'YES_NO', expects: 'DONE', textAr: `انحجز موعد ${fu?.clinicAr ?? fu?.clinic ?? 'المتابعة'}؟` };
-    case 'FOLLOWUP_ATTENDED':
-      return { ...base, kind: 'YES_NO', expects: 'DONE', textAr: `رحت لموعد ${fu?.clinicAr ?? fu?.clinic ?? 'المتابعة'}؟` };
-    case 'WOUND_CHECK':
-      return { ...base, kind: 'YES_NO', expects: 'DONE', textAr: 'شيّكت على الجرح اليوم؟' };
-  }
+  const drug = getDrug(task.refId);
+  const kind = KIND_FOR[task.type];
+  const isMed = task.type.startsWith('MED_') && !!drug;
+  const planMed = patient.plan.meds.find((m) => m.drugId === task.refId);
+  return {
+    id: `q:${task.id}`,
+    taskId: task.id,
+    kind,
+    expects: kind === 'STOPPED_CHECK' ? 'STOPPED' : 'DONE',
+    textAr: questionTextAr(task, patient, 'patient'),
+    familyTextAr: questionTextAr(task, patient, 'family'),
+    textEn: glossEn(task, drug?.generic.toLowerCase() ?? task.refId, lab?.test, fu?.clinic),
+    ...(isMed ? { drugId: task.refId, medNameAr: medNameAr(task.refId), helperAr: boxHelperAr(task.refId) } : {}),
+    ...(kind === 'DOSE_CHECK' ? { doseAsWritten: doseAsWritten(planMed) } : {}),
+  };
 }
 
 function glossEn(task: CareTask, drug: string, test?: string, clinic?: string): string {
@@ -87,12 +80,13 @@ function glossEn(task: CareTask, drug: string, test?: string, clinic?: string): 
 
 export const OPEN_MEDS_TEXT_EN = 'Any other medicine you take that we did not mention?';
 
-export function openMedsQuestion(patientId: string, today: Day): Question {
+export function openMedsQuestion(patient: Patient, today: Day): Question {
   return {
-    id: `q:${patientId}:open-meds@d${today}`,
+    id: `q:${patient.id}:open-meds@d${today}`,
     kind: 'OPEN_MEDS',
     expects: 'TAKING_UNLISTED',
-    textAr: OPEN_MEDS_TEXT,
+    textAr: openMedsTextAr(patient, 'patient'),
+    familyTextAr: openMedsTextAr(patient, 'family'),
     textEn: OPEN_MEDS_TEXT_EN,
   };
 }
@@ -125,7 +119,7 @@ export function planQuestions(
     return true;
   };
 
-  const open = openMedsQuestion(patient.id, today);
+  const open = openMedsQuestion(patient, today);
   return {
     questions: [
       ...inWindow

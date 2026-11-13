@@ -26,6 +26,8 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   GAP_CALLED: 'Call logged',
   GAP_CONFIRMED: 'Gap confirmed',
   GAP_RESOLVED: 'Gap resolved',
+  CHECKIN_ANSWER: 'Check-in answer',
+  CHECKIN_COMPLETED: 'Check-in completed',
 };
 
 export const ENGINE_ACTOR = 'WASL engine';

@@ -128,3 +128,14 @@ export function layoutCareGraph(tasks: readonly CareTask[], m: GraphMetrics = DE
     dayCenter: (day) => dayLeft(day) + m.dayWidth / 2,
   };
 }
+
+/**
+ * Compressed metrics so Day 0..lastDay fit a container width without scrolling
+ * ("Fit 14 days"). Columns never go below 40px; pills shrink with them.
+ */
+export function fitGraphMetrics(tasks: readonly CareTask[], containerWidth: number): GraphMetrics {
+  const lastDay = Math.max(FOLLOW_UP_DAYS, ...tasks.map((t) => t.deadlineDay));
+  const laneLabelWidth = 92;
+  const dayWidth = Math.max(40, Math.floor((containerWidth - laneLabelWidth - 8) / (lastDay + 1)));
+  return { dayWidth, laneLabelWidth, headerHeight: 32, nodeHeight: 26, rowGap: 6, lanePadding: 10 };
+}

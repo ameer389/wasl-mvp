@@ -14,6 +14,7 @@ import Validation from './pages/console/Validation';
 import Appointments from './pages/patient/Appointments';
 import Help from './pages/patient/Help';
 import Meds from './pages/patient/Meds';
+import Checkin from './pages/patient/Checkin';
 import Today from './pages/patient/Today';
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="meds" element={<Meds />} />
           <Route path="appointments" element={<Appointments />} />
           <Route path="help" element={<Help />} />
+          <Route path="checkin" element={<Checkin />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

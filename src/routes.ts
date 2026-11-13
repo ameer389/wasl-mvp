@@ -16,12 +16,14 @@ export const ROUTES = {
   patientMeds: '/patient/:id/meds',
   patientAppointments: '/patient/:id/appointments',
   patientHelp: '/patient/:id/help',
+  patientCheckinFlow: '/patient/:id/checkin',
 } as const;
 
 export const DEMO_PATIENT_ID = SEED_DEMO_PATIENT_ID;
 
 export const clinicianPatientPath = (id: string) => `/clinician/patient/${encodeURIComponent(id)}`;
 export const patientCheckinPath = (id: string) => `/patient/${encodeURIComponent(id)}`;
+export const patientCheckinFlowPath = (id: string) => `/patient/${encodeURIComponent(id)}/checkin`;
 
 /** Patient detail with one gap highlighted (Overview tab). */
 export const gapLink = (gap: { patientId: string; id: string }) =>

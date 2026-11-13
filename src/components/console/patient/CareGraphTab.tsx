@@ -1,10 +1,11 @@
 import { AlertTriangle, Check, Circle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GAP_TYPE_LABEL, OWNER_LABEL, TASK_TYPE_LABEL, shortTaskLabel } from '../../../domain/labels';
-import { DEFAULT_GRAPH_METRICS, layoutCareGraph } from '../../../domain/graphLayout';
+import { DEFAULT_GRAPH_METRICS, fitGraphMetrics, layoutCareGraph } from '../../../domain/graphLayout';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { CareTask, Risk, TaskStatus } from '../../../domain/types';
 import { cn } from '../../../lib/cn';
-import { Card, Drawer, Tooltip, focusRing } from '../../ui';
+import { Card, Drawer, SegmentedControl, Tooltip, focusRing } from '../../ui';
 import { RiskBadge, StatusBadge } from '../badges';
 import { EvidenceItem } from '../evidence';
 import type { PatientView } from './types';
@@ -39,16 +40,47 @@ const LEGEND: { label: string; className: string; status: TaskStatus }[] = [
 
 export function CareGraphTab({ view }: { view: PatientView }) {
   const { patient, tasks, statuses, evidence, gaps, today } = view;
-  const layout = useMemo(() => layoutCareGraph(tasks), [tasks]);
+  const wide = useMediaQuery('(min-width: 1280px)');
+  const [fitChoice, setFitChoice] = useState<'fit' | 'scroll' | undefined>();
+  const fit = (fitChoice ?? (wide ? 'fit' : 'scroll')) === 'fit';
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [boxWidth, setBoxWidth] = useState(0);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setBoxWidth(Math.floor(entry?.contentRect.width ?? 0)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const m = useMemo(() => (fit && boxWidth > 0 ? fitGraphMetrics(tasks, boxWidth) : DEFAULT_GRAPH_METRICS), [fit, boxWidth, tasks]);
+  const layout = useMemo(() => layoutCareGraph(tasks, m), [tasks, m]);
+  const compact = m.dayWidth < 96;
   const [openTask, setOpenTask] = useState<CareTask | undefined>();
-  const m = DEFAULT_GRAPH_METRICS;
   const todayX = today >= 0 && today <= layout.lastDay ? layout.dayCenter(today) : undefined;
   const days = Array.from({ length: layout.lastDay + 1 }, (_, d) => d);
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <SegmentedControl
+          label="Timeline width"
+          value={fit ? 'fit' : 'scroll'}
+          onChange={setFitChoice}
+          options={[
+            { value: 'fit', label: 'Fit 14 days' },
+            { value: 'scroll', label: 'Scroll' },
+          ]}
+        />
+        <span className="text-xs text-faint">{fit ? 'Day 0–14 at a glance; hover a task for its full name.' : 'Wider columns; scroll sideways inside the graph.'}</span>
+      </div>
       <Card padding="none" className="overflow-hidden">
-        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Care graph timeline, Day 0 to 14 (scrolls sideways)">
+        <div
+          ref={boxRef}
+          className={fit ? 'overflow-hidden' : 'overflow-x-auto'}
+          tabIndex={0}
+          role="region"
+          aria-label={fit ? 'Care graph timeline, Day 0 to 14' : 'Care graph timeline, Day 0 to 14 (scrolls sideways)'}
+        >
           <div className="relative" style={{ width: layout.width, height: layout.height + 8 }}>
             {/* lanes */}
             {layout.lanes.map((lane, i) => (
@@ -65,7 +97,7 @@ export function CareGraphTab({ view }: { view: PatientView }) {
             {days.map((d) => (
               <div key={d} className="absolute top-0 bottom-0 border-l border-line/50" style={{ left: m.laneLabelWidth + d * m.dayWidth }}>
                 <span className={cn('absolute top-2 left-2 text-xs whitespace-nowrap tabular-nums', d === today ? 'font-semibold text-ink' : 'text-faint')}>
-                  Day {d}
+                  {compact ? `D${d}` : `Day ${d}`}
                 </span>
               </div>
             ))}
@@ -90,7 +122,7 @@ export function CareGraphTab({ view }: { view: PatientView }) {
                 </g>
               )}
             </svg>
-            {todayX !== undefined && (
+            {todayX !== undefined && !compact && (
               <span
                 className="absolute rounded bg-accent px-1.5 text-[10px] leading-4 font-semibold text-bg"
                 style={{ left: todayX + 4, top: m.headerHeight - 14 }}
@@ -117,7 +149,8 @@ export function CareGraphTab({ view }: { view: PatientView }) {
                       onClick={() => setOpenTask(n.task)}
                       aria-label={`${n.task.label}, due Day ${n.task.deadlineDay}, ${status.toLowerCase()}`}
                       className={cn(
-                        'flex w-full items-center gap-1 rounded-full border px-2 text-left text-xs font-medium',
+                        'flex w-full items-center gap-1 rounded-full border text-left font-medium',
+                        compact ? 'px-1.5 text-[11px]' : 'px-2 text-xs',
                         'transition-[filter,transform] duration-150 ease-out hover:brightness-125 active:scale-[0.98] motion-reduce:active:scale-100',
                         focusRing,
                         nodeClasses(status, n.task.risk),
