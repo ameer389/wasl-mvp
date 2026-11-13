@@ -2,11 +2,11 @@
 
 **Turning discharge instructions into verified recovery actions.**
 
-[![Live demo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-22d3ee?style=flat-square)](https://<github-user>.github.io/wasl-mvp/)
-[![Start the guided demo](https://img.shields.io/badge/guided%20demo-3%20min-06141c?style=flat-square)](https://<github-user>.github.io/wasl-mvp/#/)
+[![Live demo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-22d3ee?style=flat-square)](https://ameer389.github.io/wasl-mvp/)
+[![Start the guided demo](https://img.shields.io/badge/guided%20demo-3%20min-06141c?style=flat-square)](https://ameer389.github.io/wasl-mvp/#/)
 ![MEDATHON 2026](https://img.shields.io/badge/MEDATHON%202026-Track%202%20·%20Healthcare%20Digital%20Transformation-0b2230?style=flat-square)
 
-- **Live demo:** https://<github-user>.github.io/wasl-mvp/ (replace `<github-user>` with the GitHub user or org that hosts the repo)
+- **Live demo:** https://ameer389.github.io/wasl-mvp/ (replace `ameer389` with the GitHub user or org that hosts the repo)
 - **Start the guided demo (3 min):** open the live demo and press *Start the guided demo*. It follows one synthetic patient from discharge to a resolved care gap.
 
 > **Research prototype. Not a medical device. Synthetic data only.** WASL never recommends doses, prescribes or diagnoses. It surfaces gaps and routes them to a human.
