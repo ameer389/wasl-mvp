@@ -13,6 +13,7 @@
  */
 import { makeAudit } from '../domain/audit';
 import { taskId } from '../domain/careGraph';
+import { SOURCE_LABEL } from '../domain/gapEngine';
 import type { AuditEntry, Evidence, Patient } from '../domain/types';
 
 export const DEMO_PATIENT_ID = 'demo-001';
@@ -202,15 +203,30 @@ export const SAMPLE_EVIDENCE: Evidence[] = [
   ev({ patientId: 'demo-006', taskId: t('demo-006', 'MED_CONTINUE', 'levothyroxine', 3), source: 'patient_app', day: 3, claim: 'DONE' }),
 ];
 
-/** One PLAN_CREATED entry per patient at Day 0. */
-export const SEED_AUDIT: AuditEntry[] = SAMPLE_PATIENTS.map((p, i) =>
-  makeAudit({
-    seq: i + 1,
+/** Synthetic wall-clock time for a seeded event: discharge date + day, 09:00 + n minutes. */
+function seedAt(day: number, minute: number): string {
+  const t = new Date(SEED_AT);
+  t.setUTCDate(t.getUTCDate() + day);
+  t.setUTCHours(6, minute % 60, 0, 0); // 06:00 UTC = 09:00 Riyadh
+  return t.toISOString();
+}
+
+/** PLAN_CREATED per patient (Day 0), then one EVIDENCE_ADDED per seeded evidence item. */
+export const SEED_AUDIT: AuditEntry[] = [
+  ...SAMPLE_PATIENTS.map((p) => ({
     day: 0,
     at: SEED_AT,
     actor: p.plan.hospital,
-    action: 'PLAN_CREATED',
+    action: 'PLAN_CREATED' as const,
     target: p.id,
     note: p.transfer ? `Transferred from ${p.transfer.fromHospital}` : undefined,
-  }),
-);
+  })),
+  ...SAMPLE_EVIDENCE.map((e, i) => ({
+    day: e.day,
+    at: seedAt(e.day, 5 + i),
+    actor: SOURCE_LABEL[e.source],
+    action: 'EVIDENCE_ADDED' as const,
+    target: e.taskId ?? e.patientId,
+    note: `${e.source}: ${e.claim}`,
+  })),
+].map((entry, i) => makeAudit({ ...entry, seq: i + 1 }));

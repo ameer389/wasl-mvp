@@ -23,6 +23,10 @@ export const DEMO_PATIENT_ID = SEED_DEMO_PATIENT_ID;
 export const clinicianPatientPath = (id: string) => `/clinician/patient/${encodeURIComponent(id)}`;
 export const patientCheckinPath = (id: string) => `/patient/${encodeURIComponent(id)}`;
 
+/** Patient detail with one gap highlighted (Overview tab). */
+export const gapLink = (gap: { patientId: string; id: string }) =>
+  `${clinicianPatientPath(gap.patientId)}?gap=${encodeURIComponent(gap.id)}`;
+
 export interface ConsolePageMeta {
   path: string;
   title: string;

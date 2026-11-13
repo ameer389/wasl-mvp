@@ -10,7 +10,16 @@ import { seedState, type DemoState } from './demoState';
 export type DemoAction =
   | { type: 'SET_DAY'; day: number }
   | { type: 'ADD_EVIDENCE'; evidence: Evidence; actor: string; at: string }
-  | { type: 'RESOLVE_GAP'; gapId: string; action: ResolutionAction; by: string; note?: string; at: string }
+  | {
+      type: 'RESOLVE_GAP';
+      gapId: string;
+      action: ResolutionAction;
+      by: string;
+      note?: string;
+      at: string;
+      /** The patient's own day (engine timeline). Defaults to the global simulated day. */
+      patientDay?: number;
+    }
   | { type: 'ADD_PATIENT'; patient: Patient; by: string; at: string }
   | { type: 'RESET' }
   | { type: 'REPLACE'; state: DemoState };
@@ -52,7 +61,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         ...state,
         resolutions: [
           ...state.resolutions,
-          { gapId: action.gapId, day: state.simulatedDay, action: action.action, by: action.by, ...(action.note ? { note: action.note } : {}) },
+          { gapId: action.gapId, day: action.patientDay ?? state.simulatedDay, action: action.action, by: action.by, ...(action.note ? { note: action.note } : {}) },
         ],
         audit: appendAudit(state, {
           actor: action.by,

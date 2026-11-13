@@ -9,3 +9,7 @@ export { Tabs, type TabItem } from './Tabs';
 export { ToastProvider, useToast, TOAST_DURATION_MS, type ToastOptions } from './Toast';
 export { Tooltip } from './Tooltip';
 export { focusRing, interactive } from './styles';
+export { Drawer } from './Drawer';
+export { Field, compactControlClasses, controlClasses, inputClasses, selectClasses, textareaClasses } from './Field';
+export { ProgressBar } from './ProgressBar';
+export { SegmentedControl } from './SegmentedControl';

@@ -2,7 +2,7 @@ import { SAMPLE_EVIDENCE, SAMPLE_PATIENTS, SEED_AUDIT, SEED_DAY } from '../data/
 import type { AuditEntry, Day, Evidence, GapResolution, Patient } from '../domain/types';
 
 /** Bump when the shape of DemoState or the seed changes; old saved state is discarded. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export interface DemoState {
   version: number;

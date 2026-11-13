@@ -7,3 +7,8 @@ export const FOLLOW_UP_DAYS = 14;
 export function clampDay(day: Day): Day {
   return Math.min(FOLLOW_UP_DAYS, Math.max(0, Math.round(day)));
 }
+
+/** A patient's own day since discharge, from the global simulated day. Negative = not yet discharged. */
+export function patientDay(globalDay: Day, dischargeDay: Day = 0): Day {
+  return globalDay - dischargeDay;
+}

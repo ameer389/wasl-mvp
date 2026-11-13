@@ -8,8 +8,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
 /**
  * Global single-key shortcut (e.g. '[' or ']').
  * Ignored while typing in a field or when a modifier key is held.
+ * If the handler returns false the key is left alone (default action not prevented).
  */
-export function useHotkey(key: string, handler: () => void, enabled = true): void {
+export function useHotkey(key: string, handler: () => boolean | void, enabled = true): void {
   const handlerRef = useRef(handler);
   useEffect(() => {
     handlerRef.current = handler;
@@ -19,8 +20,7 @@ export function useHotkey(key: string, handler: () => void, enabled = true): voi
     if (!enabled) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== key || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return;
-      e.preventDefault();
-      handlerRef.current();
+      if (handlerRef.current() !== false) e.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

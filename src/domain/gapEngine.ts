@@ -53,7 +53,7 @@ export const FEED_SOURCE_FOR: Partial<Record<TaskType, EvidenceSource>> = {
   FOLLOWUP_ATTENDED: 'appointment_system',
 };
 
-const SOURCE_LABEL: Record<EvidenceSource, string> = {
+export const SOURCE_LABEL: Record<EvidenceSource, string> = {
   patient_voice: 'Patient voice check-in',
   patient_app: 'Patient app',
   family: 'Family report',

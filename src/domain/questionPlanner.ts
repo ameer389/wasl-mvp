@@ -3,7 +3,7 @@
  * Picks the few check-in questions that still matter today, versus a baseline
  * phone-call script that asks about every patient-side task.
  */
-import { requireDrug } from './drugs';
+import { getDrug, requireDrug } from './drugs';
 import { FEED_SOURCE_FOR, VERIFY_THRESHOLD } from './gapEngine';
 import type { CareTask, Day, Evidence, Patient, Question, Risk, TaskStatus } from './types';
 
@@ -35,9 +35,10 @@ export function spokenDrugName(drugId: string, patient: Patient): string {
 
 export function questionForTask(task: CareTask, patient: Patient): Question {
   const id = `q:${task.id}`;
-  const base = { id, taskId: task.id };
   const lab = patient.plan.labs.find((l) => l.id === task.refId);
   const fu = patient.plan.followUps.find((f) => f.id === task.refId);
+  const drug = getDrug(task.refId)?.generic.toLowerCase() ?? task.refId;
+  const base = { id, taskId: task.id, textEn: glossEn(task, drug, lab?.test, fu?.clinic) };
   switch (task.type) {
     case 'MED_START':
       return { ...base, kind: 'MED_START', expects: 'DONE', textAr: `بديت الدواء الجديد ${spokenDrugName(task.refId, patient)}؟` };
@@ -63,8 +64,37 @@ export function questionForTask(task: CareTask, patient: Patient): Question {
   }
 }
 
+function glossEn(task: CareTask, drug: string, test?: string, clinic?: string): string {
+  switch (task.type) {
+    case 'MED_START':
+      return `Started the new ${drug}?`;
+    case 'MED_CONTINUE':
+      return `Still on ${drug}?`;
+    case 'MED_DOSE_CHANGE':
+      return `On the new ${drug} dose from the discharge sheet?`;
+    case 'MED_STOP':
+      return `Stopped ${drug} as the doctor said?`;
+    case 'LAB_DONE':
+      return `Had the ${test ?? 'lab'} test done?`;
+    case 'FOLLOWUP_BOOKED':
+      return `Is the ${clinic ?? 'follow-up'} appointment booked?`;
+    case 'FOLLOWUP_ATTENDED':
+      return `Went to the ${clinic ?? 'follow-up'} appointment?`;
+    case 'WOUND_CHECK':
+      return 'Checked the wound today?';
+  }
+}
+
+export const OPEN_MEDS_TEXT_EN = 'Any other medicine you take that we did not mention?';
+
 export function openMedsQuestion(patientId: string, today: Day): Question {
-  return { id: `q:${patientId}:open-meds@d${today}`, kind: 'OPEN_MEDS', expects: 'TAKING_UNLISTED', textAr: OPEN_MEDS_TEXT };
+  return {
+    id: `q:${patientId}:open-meds@d${today}`,
+    kind: 'OPEN_MEDS',
+    expects: 'TAKING_UNLISTED',
+    textAr: OPEN_MEDS_TEXT,
+    textEn: OPEN_MEDS_TEXT_EN,
+  };
 }
 
 const byRiskThenDeadline = (a: CareTask, b: CareTask) =>

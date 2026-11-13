@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { interactive } from './styles';
 
@@ -18,9 +18,13 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   variant?: 'ghost' | 'secondary';
 }
 
-export function IconButton({ label, icon, size = 'md', variant = 'ghost', className, type = 'button', ...rest }: IconButtonProps) {
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { label, icon, size = 'md', variant = 'ghost', className, type = 'button', ...rest },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       aria-label={label}
       className={cn(
@@ -37,4 +41,4 @@ export function IconButton({ label, icon, size = 'md', variant = 'ghost', classN
       {icon}
     </button>
   );
-}
+});

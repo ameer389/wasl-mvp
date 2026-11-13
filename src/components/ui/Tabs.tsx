@@ -15,12 +15,21 @@ interface TabsProps {
   label: string;
   items: TabItem[];
   defaultId?: string;
+  /** Controlled mode (e.g. synced with ?tab=). */
+  value?: string;
+  onValueChange?: (id: string) => void;
 }
 
 /** Accessible tabs (WAI-ARIA pattern): arrow keys / Home / End move between tabs. */
-export function Tabs({ label, items, defaultId }: TabsProps) {
+export function Tabs({ label, items, defaultId, value, onValueChange }: TabsProps) {
   const baseId = useId();
-  const [activeId, setActiveId] = useState(defaultId ?? items[0]?.id);
+  const [internalId, setInternalId] = useState(defaultId ?? items[0]?.id);
+  const activeId = value ?? internalId;
+  const setActiveId = (id: string | undefined) => {
+    if (!id) return;
+    setInternalId(id);
+    onValueChange?.(id);
+  };
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeIndex = Math.max(
     0,

@@ -64,6 +64,25 @@ tests/ (vitest)
 - Shared informal names stay ambiguous unless the question's drug resolves them. In OPEN_MEDS they become TAKING_UNLISTED with no drugId and a detail listing the candidates.
 - Evaluation discipline: tune with `npm run eval:parser -- --dev-only`. Never edit the parser for a test-split item, and never edit or relabel test items. Report the results and limitations from validation/README.md honestly.
 
+## Care team console (Phase 4, follow in later phases)
+- Presentation helpers are pure and tested, in src/domain:
+  - `labels.ts`: plain-English gap / route / claim / status labels and short task labels
+  - `claimOptions.ts`: what a clinician can confirm per task type; none for feed-verified labs and appointments
+  - `queue.ts`: filters, plus grouping NO_RESPONSE per patient
+  - `metrics.ts`
+  - `graphLayout.ts`: care-graph geometry
+  - `planForm.ts`: New discharge validation, `formToPatient`, sample case
+  - `auditTrail.ts`: stored audit entries plus derived "Gap detected" rows
+- **Per-patient timelines.** `Patient.dischargeDay` is the global simulated day of discharge (demo patients 0, new patients the current day). Each patient's engine day is `patientDay(globalDay, dischargeDay)`. Evidence and resolutions use the patient day; audit entries use the global day. Always go through `store.patientToday(id)`.
+- **Clinician actions:**
+  - "Log call" records a CALLED resolution and shows "In review".
+  - "Confirm what happened" calls `store.confirmTask`, which records clinician evidence with confidence 1 and confirmedByHuman, and the engine re-evaluates.
+  - "Mark resolved" records RESOLVED, requires a note and offers Undo via a state snapshot.
+  - Every one of these writes an audit entry.
+- **Deep links:** `/clinician/patient/:id?gap=<gapId>` highlights a gap (`gapLink()` in routes.ts) and `?tab=care-graph|expected|audit` opens a tab.
+- **Styling:** cn() does not de-duplicate Tailwind classes. Use `controlClasses` plus your own sizes, or `compactControlClasses`, instead of overriding the sizes inside `inputClasses`.
+- **Slide screenshots:** `npm run check:views` (dev server running) writes `screenshots/slide-*.png` at 1440×900, Day 4, and runs the queue, resolve, confirm, new-discharge and care-graph drawer interactions.
+
 ## Build phases
 1 Setup & shell · 2 Domain core + tests · 3 Saudi-dialect parser + dataset · 4 Clinician dashboard · 5 Patient check-in (voice) · 6 Validation suite · 7 README + deploy.
 Work only on the phase you are asked for.

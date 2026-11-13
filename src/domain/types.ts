@@ -63,6 +63,11 @@ export interface Patient {
   sex: 'M' | 'F';
   plan: DischargePlan;
   transfer?: { fromHospital: string; toHospital: string };
+  /**
+   * Simulated (global) day this patient was discharged. Demo patients: 0.
+   * The patient's own timeline is globalDay − dischargeDay (see patientDay()).
+   */
+  dischargeDay?: Day;
 }
 
 // ── Care graph ────────────────────────────────────────────────────────────────
@@ -215,6 +220,8 @@ export interface Question {
   kind: QuestionKind;
   /** Simple Saudi dialect. */
   textAr: string;
+  /** English gloss for the care team (not shown to the patient). */
+  textEn: string;
   /** The evidence claim a "yes" answer maps to. */
   expects: EvidenceClaim;
 }
