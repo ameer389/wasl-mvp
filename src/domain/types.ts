@@ -197,7 +197,17 @@ export interface AuditEntry {
 
 // ── Questions ─────────────────────────────────────────────────────────────────
 
-export type QuestionKind = 'YES_NO' | 'STOPPED_CHECK' | 'DOSE_CHECK' | 'OPEN_MEDS';
+/**
+ * How an answer is interpreted (shared by the question planner and the Arabic parser).
+ * Wording per kind is fixed in questionPlanner.ts; the parser assumes exactly that wording:
+ *   MED_START     «بديت الدواء الجديد …؟»          yes → started
+ *   MED_CONTINUE  «للحين مستمر على …؟»             yes → still taking as planned
+ *   STOPPED_CHECK «وقّفت … زي ما قال لك الدكتور؟»  yes → stopped
+ *   DOSE_CHECK    «تاخذ … على الجرعة الجديدة …؟»   yes → on the new dose
+ *   OPEN_MEDS     «فيه أي دواء ثاني تاخذه …؟»      names medicines, or none
+ *   YES_NO        labs / appointments / wound      yes → done
+ */
+export type QuestionKind = 'MED_START' | 'MED_CONTINUE' | 'STOPPED_CHECK' | 'DOSE_CHECK' | 'OPEN_MEDS' | 'YES_NO';
 
 export interface Question {
   id: string;

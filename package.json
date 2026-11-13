@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:views": "node scripts/check-views.mjs"
+    "check:views": "node scripts/check-views.mjs",
+    "eval:parser": "tsx scripts/eval-parser.ts"
   },
   "dependencies": {
     "lucide-react": "^1.72.0",
@@ -26,6 +27,7 @@
     "@vitejs/plugin-react": "^6.3.0",
     "playwright-core": "^1.65.0",
     "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"

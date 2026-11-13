@@ -57,6 +57,13 @@ tests/ (vitest)
 - Reason strings are descriptive (expected → evidence → rule fired). Never write increase/decrease/take/give/stop taking/double/reduce; tests enforce this.
 - Demo state is persisted under `wasl.demo.v{STATE_VERSION}`. Bump `STATE_VERSION` in src/state/demoState.ts whenever the seed or the state shape changes. The demo opens on `SEED_DAY` (4).
 
+## Answer understanding (Phase 3, follow in later phases)
+- Flow: question (planner, `kind`) → `parseAnswer(text, { questionKind, drugId, asrConfidence })` → `answerToEvidence(...)` → store `addEvidence`. Never map answers to claims anywhere else.
+- Question wording per `QuestionKind` is fixed in questionPlanner.ts and documented on the type. If wording changes, the parser readings must change too.
+- Confidence = trust as evidence. UNSURE is capped at 0.45 and UNKNOWN is 0.2, so both feed LOW_CONFIDENCE. ASR confidence multiplies in.
+- Shared informal names stay ambiguous unless the question's drug resolves them. In OPEN_MEDS they become TAKING_UNLISTED with no drugId and a detail listing the candidates.
+- Evaluation discipline: tune with `npm run eval:parser -- --dev-only`. Never edit the parser for a test-split item, and never edit or relabel test items. Report the results and limitations from validation/README.md honestly.
+
 ## Build phases
 1 Setup & shell · 2 Domain core + tests · 3 Saudi-dialect parser + dataset · 4 Clinician dashboard · 5 Patient check-in (voice) · 6 Validation suite · 7 README + deploy.
 Work only on the phase you are asked for.

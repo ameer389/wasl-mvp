@@ -40,9 +40,9 @@ export function questionForTask(task: CareTask, patient: Patient): Question {
   const fu = patient.plan.followUps.find((f) => f.id === task.refId);
   switch (task.type) {
     case 'MED_START':
-      return { ...base, kind: 'YES_NO', expects: 'DONE', textAr: `بديت الدواء الجديد ${spokenDrugName(task.refId, patient)}؟` };
+      return { ...base, kind: 'MED_START', expects: 'DONE', textAr: `بديت الدواء الجديد ${spokenDrugName(task.refId, patient)}؟` };
     case 'MED_CONTINUE':
-      return { ...base, kind: 'YES_NO', expects: 'DONE', textAr: `للحين مستمر على ${spokenDrugName(task.refId, patient)}؟` };
+      return { ...base, kind: 'MED_CONTINUE', expects: 'DONE', textAr: `للحين مستمر على ${spokenDrugName(task.refId, patient)}؟` };
     case 'MED_DOSE_CHANGE':
       return {
         ...base,
