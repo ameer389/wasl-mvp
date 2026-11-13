@@ -1,12 +1,15 @@
 import { HeartHandshake, Mic } from 'lucide-react';
+import { useParams } from 'react-router-dom';
 import ProgressRing from '../../components/patient/ProgressRing';
 import { Button, Card, useToast } from '../../components/ui';
 import { toArabicDigits } from '../../lib/arabicDigits';
-
-const QUESTIONS_TODAY = 3;
+import { useQuestionPlan } from '../../state/store';
 
 export default function Today() {
   const toast = useToast();
+  const { id } = useParams<{ id: string }>();
+  // Adaptive plan: only what is still uncertain today (+ the open medicines question).
+  const QUESTIONS_TODAY = useQuestionPlan(id)?.questions.length ?? 0;
 
   return (
     <div className="flex flex-col gap-6 px-5 py-6">

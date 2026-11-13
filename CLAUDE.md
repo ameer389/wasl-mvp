@@ -47,6 +47,16 @@ src/pages, src/components
 validation/ (synthetic test scenarios, labelled utterances, results)
 tests/ (vitest)
 
+## Domain conventions (Phase 2, follow in later phases)
+- Pipeline: `buildCareGraph(patient)` → `evaluate(patient, tasks, evidence, resolutions, today)` → `planQuestions(...)`. All three are pure; React only goes through `src/state/store.tsx` (`useDemoStore`, `usePatient`, `useQuestionPlan`, `useSimulatedDay`).
+- Task status is derived, never stored. Ids are deterministic: tasks `${patientId}/${type}/${refId}@d${deadline}`, gaps `${patientId}:${type}:${taskId|drugId}`.
+- Evidence links to a task via `taskId`. Medication-level reports (`TAKING_UNLISTED`) use `drugId`. Only evidence with `day ≤ today` counts.
+- `VERIFY_THRESHOLD = 0.7` is a hard floor: below it nothing verifies, and claim rules (NOT_STARTED / STOPPED_STILL_TAKEN / WRONG_DOSE) don't fire. A LOW_CONFIDENCE gap fires instead and is routed by the task's risk. A human confirmation is recorded as confidence 1.
+- Feed-verifiable tasks (LAB_DONE, FOLLOWUP_*) are covered by the feed rules, not by NO_RESPONSE, and the planner asks about them only once the feed is silent past due.
+- A RESOLVED resolution closes a gap only if it is on or after the latest triggering evidence; new evidence re-opens the gap. Every resolution writes an audit entry.
+- Reason strings are descriptive (expected → evidence → rule fired). Never write increase/decrease/take/give/stop taking/double/reduce; tests enforce this.
+- Demo state is persisted under `wasl.demo.v{STATE_VERSION}`. Bump `STATE_VERSION` in src/state/demoState.ts whenever the seed or the state shape changes. The demo opens on `SEED_DAY` (4).
+
 ## Build phases
 1 Setup & shell · 2 Domain core + tests · 3 Saudi-dialect parser + dataset · 4 Clinician dashboard · 5 Patient check-in (voice) · 6 Validation suite · 7 README + deploy.
 Work only on the phase you are asked for.

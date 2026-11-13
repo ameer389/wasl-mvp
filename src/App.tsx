@@ -2,7 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import ConsoleShell from './components/console/ConsoleShell';
 import PatientShell from './components/patient/PatientShell';
 import { ROUTES } from './routes';
-import { SimulatedDayProvider } from './state/simulatedDay';
+import { DemoStoreProvider } from './state/store';
 import NotFound from './pages/NotFound';
 import RoleLauncher from './pages/RoleLauncher';
 import About from './pages/console/About';
@@ -18,7 +18,7 @@ import Today from './pages/patient/Today';
 
 export default function App() {
   return (
-    <SimulatedDayProvider>
+    <DemoStoreProvider>
       <Routes>
         <Route path={ROUTES.launcher} element={<RoleLauncher />} />
 
@@ -42,6 +42,6 @@ export default function App() {
 
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </SimulatedDayProvider>
+    </DemoStoreProvider>
   );
 }

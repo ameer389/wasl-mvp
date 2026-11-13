@@ -1,5 +1,5 @@
 import { matchPath } from 'react-router-dom';
-import { DEMO_PATIENT } from './data/demoPatient';
+import { DEMO_PATIENT_ID as SEED_DEMO_PATIENT_ID } from './data/samplePatients';
 
 /** Route paths in one place so links and the router never drift apart. */
 export const ROUTES = {
@@ -18,7 +18,7 @@ export const ROUTES = {
   patientHelp: '/patient/:id/help',
 } as const;
 
-export const DEMO_PATIENT_ID = DEMO_PATIENT.id;
+export const DEMO_PATIENT_ID = SEED_DEMO_PATIENT_ID;
 
 export const clinicianPatientPath = (id: string) => `/clinician/patient/${encodeURIComponent(id)}`;
 export const patientCheckinPath = (id: string) => `/patient/${encodeURIComponent(id)}`;

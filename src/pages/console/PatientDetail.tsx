@@ -1,8 +1,8 @@
 import { GitCompareArrows, History, LayoutDashboard, Network } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { Badge, Card, EmptyState, Tabs, type TabItem } from '../../components/ui';
-import { patientDisplayNameEn } from '../../data/demoPatient';
 import { useSimulatedDay } from '../../state/simulatedDay';
+import { usePatient } from '../../state/store';
 
 const TABS: TabItem[] = [
   {
@@ -58,7 +58,7 @@ const TABS: TabItem[] = [
 export default function PatientDetail() {
   const { id = '' } = useParams<{ id: string }>();
   const { day, totalDays } = useSimulatedDay();
-  const name = patientDisplayNameEn(id);
+  const name = usePatient(id)?.nameEn ?? id;
   const initials = name
     .split(/\s+/)
     .map((w) => w[0])

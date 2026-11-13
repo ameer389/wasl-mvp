@@ -67,18 +67,29 @@ for (const view of VIEWS) {
   await context.close();
 }
 
-// Interaction smoke test: ] advances the simulated day, Reset demo shows an Undo toast.
+// Interaction smoke test: ] advances the simulated day (persisted across reload),
+// gap counts are live, Reset demo restores the seed day and offers Undo.
 {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(`${APP_URL}#/clinician`, { waitUntil: 'networkidle' });
+  const stepperText = async () =>
+    (await page.getByRole('group', { name: 'Simulated day since discharge' }).innerText()).replace(/\s+/g, ' ');
+  const dayOf = async () => Number((await stepperText()).match(/Day (\d+) of/)?.[1]);
+  const seedDay = await dayOf();
+  const gapBadge = await page.getByRole('link', { name: 'Care gaps' }).innerText();
   await page.keyboard.press(']');
   await page.keyboard.press(']');
-  const stepper = await page.getByRole('group', { name: 'Simulated day since discharge' }).innerText();
+  const advanced = await dayOf();
+  await page.reload({ waitUntil: 'networkidle' });
+  const afterReload = await dayOf();
   await page.getByRole('button', { name: 'Reset demo' }).click();
   const toastVisible = await page.getByRole('button', { name: 'Undo' }).isVisible();
-  const ok = /Day\s*2\s*of 14/.test(stepper.replace(/\s+/g, ' ')) && toastVisible;
+  const afterReset = await dayOf();
+  const ok = advanced === seedDay + 2 && afterReload === advanced && afterReset === seedDay && toastVisible;
   if (!ok) failures++;
-  console.log(`${ok ? 'PASS' : 'FAIL'}  interaction: ] → "${stepper.replace(/\s+/g, ' ').trim()}", undo toast: ${toastVisible}`);
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'}  interaction: seed day ${seedDay} → ]] ${advanced} → reload ${afterReload} → reset ${afterReset}, undo toast: ${toastVisible}, care-gaps nav: "${gapBadge.replace(/\s+/g, ' ')}"`,
+  );
   await page.close();
 }
 

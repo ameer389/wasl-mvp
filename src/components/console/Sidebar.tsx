@@ -16,7 +16,8 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { cn } from '../../lib/cn';
 import { readStored, STORAGE_KEYS, writeStored } from '../../lib/storage';
 import { DEMO_PATIENT_ID, ROUTES, patientCheckinPath } from '../../routes';
-import { useSimulatedDay } from '../../state/simulatedDay';
+import { clinicianGaps } from '../../state/selectors';
+import { useDemoStore } from '../../state/store';
 import DemoBadge from '../DemoBadge';
 import { Badge, Tooltip, focusRing, useToast } from '../ui';
 import { WaslMark } from '../WaslMark';
@@ -27,12 +28,12 @@ interface NavItem {
   icon: LucideIcon;
   /** Route patterns that mark this item active. */
   match: string[];
-  count?: number;
+  /** Show the open clinician gap count on this item. */
+  showGapCount?: boolean;
 }
 
 const NAV: NavItem[] = [
-  // Counts are 0 until the gap engine exists (Phase 2+).
-  { to: ROUTES.careGaps, label: 'Care gaps', icon: Inbox, match: [ROUTES.careGaps], count: 0 },
+  { to: ROUTES.careGaps, label: 'Care gaps', icon: Inbox, match: [ROUTES.careGaps], showGapCount: true },
   { to: ROUTES.patients, label: 'Patients', icon: Users, match: [ROUTES.patients, ROUTES.clinicianPatient] },
   { to: ROUTES.newDischarge, label: 'New discharge', icon: FilePlus2, match: [ROUTES.newDischarge] },
   { to: ROUTES.validation, label: 'Validation', icon: FlaskConical, match: [ROUTES.validation] },
@@ -51,7 +52,8 @@ export default function Sidebar() {
   const [userCollapsed, setUserCollapsed] = useState(() => readStored(STORAGE_KEYS.sidebarCollapsed, false));
   const collapsed = !isWide || userCollapsed;
 
-  const { day, setDay } = useSimulatedDay();
+  const store = useDemoStore();
+  const gapCount = clinicianGaps(store.evaluation.gaps).length;
   const toast = useToast();
 
   const toggleCollapsed = () => {
@@ -62,11 +64,11 @@ export default function Sidebar() {
   };
 
   const resetDemo = () => {
-    const previousDay = day;
-    setDay(0);
+    const snapshot = store.state;
+    store.reset();
     toast.show({
-      message: 'Demo reset — simulated day set to 0.',
-      action: { label: 'Undo', onClick: () => setDay(previousDay) },
+      message: 'Demo reset to the starting synthetic scenario.',
+      action: { label: 'Undo', onClick: () => store.replace(snapshot) },
     });
   };
 
@@ -106,7 +108,7 @@ export default function Sidebar() {
                   <Link
                     to={item.to}
                     aria-current={active ? 'page' : undefined}
-                    aria-label={collapsed ? item.label : undefined}
+                    aria-label={collapsed ? (item.showGapCount ? `${item.label}, ${gapCount} open` : item.label) : undefined}
                     className={cn(
                       itemBase,
                       itemLayout,
@@ -119,10 +121,18 @@ export default function Sidebar() {
                     )}
                     <Icon size={18} aria-hidden="true" className={active ? 'text-accent' : undefined} />
                     {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
-                    {!collapsed && item.count !== undefined && (
-                      <Badge variant="neutral" aria-label={`${item.count} open`}>
-                        {item.count}
+                    {!collapsed && item.showGapCount && (
+                      <Badge variant="neutral" aria-label={`${gapCount} open gaps`}>
+                        {gapCount}
                       </Badge>
+                    )}
+                    {collapsed && item.showGapCount && gapCount > 0 && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -top-1 -right-1 min-w-4 rounded-full border border-line bg-surface-3 px-1 text-center text-[10px] leading-4 font-semibold text-ink tabular-nums"
+                      >
+                        {gapCount}
+                      </span>
                     )}
                   </Link>
                 </Tooltip>

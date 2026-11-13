@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toArabicDigits } from '../src/lib/arabicDigits';
 import { findConsolePage } from '../src/routes';
-import { FOLLOW_UP_DAYS, clampDay } from '../src/state/simulatedDay';
+import { FOLLOW_UP_DAYS, clampDay } from '../src/domain/time';
 
 describe('toArabicDigits', () => {
   it('converts every Western digit to Arabic-Indic', () => {

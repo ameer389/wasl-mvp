@@ -1,19 +1,21 @@
 import { ChevronRight } from 'lucide-react';
 import { matchPath, useLocation } from 'react-router-dom';
-import { patientDisplayNameEn } from '../../data/demoPatient';
 import { cn } from '../../lib/cn';
 import { ROUTES, findConsolePage } from '../../routes';
+import { escalationsNow } from '../../state/selectors';
+import { useDemoStore } from '../../state/store';
 import DayStepper from './DayStepper';
 
 function usePageHeading(): { title: string; crumbs: string[] } {
   const { pathname } = useLocation();
+  const { state } = useDemoStore();
   const page = findConsolePage(pathname);
-  const patient = matchPath(ROUTES.clinicianPatient, pathname);
-  const title = patient?.params.id ? patientDisplayNameEn(patient.params.id) : (page?.title ?? 'Care team');
-  return { title, crumbs: page?.crumbs ?? ['Care team'] };
+  const patientId = matchPath(ROUTES.clinicianPatient, pathname)?.params.id;
+  const patientName = patientId ? (state.patients.find((p) => p.id === patientId)?.nameEn ?? patientId) : undefined;
+  return { title: patientName ?? page?.title ?? 'Care team', crumbs: page?.crumbs ?? ['Care team'] };
 }
 
-/** Escalations that need a clinician now. 0 until the gap engine exists. */
+/** Open gaps routed CLINICIAN_NOW at the current simulated day. */
 function EscalationsIndicator({ count }: { count: number }) {
   return (
     <div
@@ -29,6 +31,7 @@ function EscalationsIndicator({ count }: { count: number }) {
 
 export default function TopBar() {
   const { title, crumbs } = usePageHeading();
+  const { evaluation } = useDemoStore();
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-bg px-6">
       <div className="min-w-0 flex-1">
@@ -45,7 +48,7 @@ export default function TopBar() {
         <h1 className="truncate text-sm font-semibold text-ink">{title}</h1>
       </div>
       <DayStepper />
-      <EscalationsIndicator count={0} />
+      <EscalationsIndicator count={escalationsNow(evaluation.gaps).length} />
     </header>
   );
 }
