@@ -1,0 +1,603 @@
+{
+  "dataset": "validation/utterances.json",
+  "note": "Synthetic dataset; dataset and parser written by the same team. Parser tuned on dev only. Not clinical validation.",
+  "verifyThreshold": 0.7,
+  "counts": {
+    "total": 130,
+    "dev": 52,
+    "test": 78
+  },
+  "dev": {
+    "n": 52,
+    "correct": 47,
+    "accuracy": 90.4,
+    "hardAccuracy": 83.3,
+    "hardN": 18,
+    "medExtraction": {
+      "items": 5,
+      "exactMatch": 100,
+      "mismatches": []
+    },
+    "safeFailure": {
+      "wrong": 5,
+      "lowConfidence": 5,
+      "pctOfWrong": 100,
+      "unsafe": 0
+    },
+    "byQuestionKind": {
+      "MED_START": {
+        "n": 12,
+        "correct": 12,
+        "accuracy": 100
+      },
+      "MED_CONTINUE": {
+        "n": 10,
+        "correct": 10,
+        "accuracy": 100
+      },
+      "STOPPED_CHECK": {
+        "n": 11,
+        "correct": 10,
+        "accuracy": 90.9
+      },
+      "DOSE_CHECK": {
+        "n": 9,
+        "correct": 8,
+        "accuracy": 88.9
+      },
+      "OPEN_MEDS": {
+        "n": 10,
+        "correct": 7,
+        "accuracy": 70
+      }
+    },
+    "perIntent": {
+      "MENTIONS_MEDS": {
+        "precision": 1,
+        "recall": 0.4,
+        "f1": 0.57,
+        "support": 5,
+        "predicted": 2
+      },
+      "NEW_DOSE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 3,
+        "predicted": 3
+      },
+      "NO": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 7,
+        "predicted": 7
+      },
+      "NONE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 3,
+        "predicted": 3
+      },
+      "OLD_DOSE": {
+        "precision": 1,
+        "recall": 0.67,
+        "f1": 0.8,
+        "support": 3,
+        "predicted": 2
+      },
+      "STILL_TAKING": {
+        "precision": 1,
+        "recall": 0.75,
+        "f1": 0.86,
+        "support": 4,
+        "predicted": 3
+      },
+      "STOPPED": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 4,
+        "predicted": 4
+      },
+      "UNKNOWN": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 5,
+        "predicted": 5
+      },
+      "UNSURE": {
+        "precision": 0.67,
+        "recall": 1,
+        "f1": 0.8,
+        "support": 10,
+        "predicted": 15
+      },
+      "YES": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 8,
+        "predicted": 8
+      }
+    },
+    "confusion": {
+      "YES": {
+        "YES": 8
+      },
+      "NO": {
+        "NO": 7
+      },
+      "UNSURE": {
+        "UNSURE": 10
+      },
+      "UNKNOWN": {
+        "UNKNOWN": 5
+      },
+      "STOPPED": {
+        "STOPPED": 4
+      },
+      "STILL_TAKING": {
+        "STILL_TAKING": 3,
+        "UNSURE": 1
+      },
+      "NEW_DOSE": {
+        "NEW_DOSE": 3
+      },
+      "OLD_DOSE": {
+        "OLD_DOSE": 2,
+        "UNSURE": 1
+      },
+      "NONE": {
+        "NONE": 3
+      },
+      "MENTIONS_MEDS": {
+        "UNSURE": 3,
+        "MENTIONS_MEDS": 2
+      }
+    },
+    "wrongItems": [
+      {
+        "id": "u073",
+        "kind": "STOPPED_CHECK",
+        "text": "لا ما دريت انها توقف",
+        "expected": "STILL_TAKING",
+        "got": "UNSURE",
+        "confidence": 0.39,
+        "safe": true,
+        "cues": [
+          "no:لا→STILL_TAKING",
+          "توقف→STOPPED",
+          "conflict: STOPPED 0.85 vs 0.9"
+        ]
+      },
+      {
+        "id": "u096",
+        "kind": "DOSE_CHECK",
+        "text": "والله ما انتبهت انهم غيروها اخذ مثل ما كنت اخذ",
+        "expected": "OLD_DOSE",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "مثل ما كنت→OLD_DOSE",
+          "historical report does not establish current use"
+        ]
+      },
+      {
+        "id": "u114",
+        "kind": "OPEN_MEDS",
+        "text": "حبة الضغط القديمة وحبوب المعدة",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "med:وحبوب المعده→esomeprazole|omeprazole",
+          "med:حبه الضغط→amlodipine|bisoprolol|losartan"
+        ]
+      },
+      {
+        "id": "u116",
+        "kind": "OPEN_MEDS",
+        "text": "البخاخ بس اذا ضاق نفسي",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "med:البخاخ→salbutamol"
+        ]
+      },
+      {
+        "id": "u124",
+        "kind": "OPEN_MEDS",
+        "text": "بلافكس",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "med:بلافكس→clopidogrel"
+        ]
+      }
+    ]
+  },
+  "test": {
+    "n": 78,
+    "correct": 64,
+    "accuracy": 82.1,
+    "hardAccuracy": 60,
+    "hardN": 20,
+    "medExtraction": {
+      "items": 9,
+      "exactMatch": 55.6,
+      "mismatches": [
+        {
+          "id": "u008",
+          "text": "اي بديت حبة السيوله الصبح",
+          "expected": [],
+          "got": [
+            "apixaban"
+          ]
+        },
+        {
+          "id": "u039",
+          "text": "ايه حبه الضغط ما تركتها",
+          "expected": [],
+          "got": [
+            "bisoprolol"
+          ]
+        },
+        {
+          "id": "u074",
+          "text": "للحين نعطيه حبة السيوله القديمه مع الجديده",
+          "expected": [],
+          "got": [
+            "clopidogrel"
+          ]
+        },
+        {
+          "id": "u125",
+          "text": "اخذ فيفادول للصداع",
+          "expected": [
+            "paracetamol"
+          ],
+          "got": []
+        }
+      ]
+    },
+    "safeFailure": {
+      "wrong": 14,
+      "lowConfidence": 12,
+      "pctOfWrong": 85.7,
+      "unsafe": 2
+    },
+    "byQuestionKind": {
+      "MED_START": {
+        "n": 17,
+        "correct": 14,
+        "accuracy": 82.4
+      },
+      "MED_CONTINUE": {
+        "n": 17,
+        "correct": 16,
+        "accuracy": 94.1
+      },
+      "STOPPED_CHECK": {
+        "n": 15,
+        "correct": 15,
+        "accuracy": 100
+      },
+      "DOSE_CHECK": {
+        "n": 13,
+        "correct": 8,
+        "accuracy": 61.5
+      },
+      "OPEN_MEDS": {
+        "n": 16,
+        "correct": 11,
+        "accuracy": 68.8
+      }
+    },
+    "perIntent": {
+      "MENTIONS_MEDS": {
+        "precision": 1,
+        "recall": 0.38,
+        "f1": 0.55,
+        "support": 8,
+        "predicted": 3
+      },
+      "NEW_DOSE": {
+        "precision": 1,
+        "recall": 0.5,
+        "f1": 0.67,
+        "support": 4,
+        "predicted": 2
+      },
+      "NO": {
+        "precision": 0.78,
+        "recall": 0.7,
+        "f1": 0.74,
+        "support": 10,
+        "predicted": 9
+      },
+      "NONE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 5,
+        "predicted": 5
+      },
+      "OLD_DOSE": {
+        "precision": 1,
+        "recall": 0.6,
+        "f1": 0.75,
+        "support": 5,
+        "predicted": 3
+      },
+      "STILL_TAKING": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 6,
+        "predicted": 6
+      },
+      "STOPPED": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 6,
+        "predicted": 6
+      },
+      "UNKNOWN": {
+        "precision": 0.7,
+        "recall": 0.88,
+        "f1": 0.78,
+        "support": 8,
+        "predicted": 10
+      },
+      "UNSURE": {
+        "precision": 0.61,
+        "recall": 1,
+        "f1": 0.76,
+        "support": 14,
+        "predicted": 23
+      },
+      "YES": {
+        "precision": 1,
+        "recall": 0.92,
+        "f1": 0.96,
+        "support": 12,
+        "predicted": 11
+      }
+    },
+    "confusion": {
+      "YES": {
+        "YES": 11,
+        "UNSURE": 1
+      },
+      "NO": {
+        "NO": 7,
+        "UNSURE": 2,
+        "UNKNOWN": 1
+      },
+      "UNSURE": {
+        "UNSURE": 14
+      },
+      "UNKNOWN": {
+        "UNKNOWN": 7,
+        "UNSURE": 1
+      },
+      "STOPPED": {
+        "STOPPED": 6
+      },
+      "STILL_TAKING": {
+        "STILL_TAKING": 6
+      },
+      "NEW_DOSE": {
+        "NEW_DOSE": 2,
+        "UNKNOWN": 2
+      },
+      "OLD_DOSE": {
+        "OLD_DOSE": 3,
+        "NO": 2
+      },
+      "NONE": {
+        "NONE": 5
+      },
+      "MENTIONS_MEDS": {
+        "UNSURE": 5,
+        "MENTIONS_MEDS": 3
+      }
+    },
+    "wrongItems": [
+      {
+        "id": "u013",
+        "kind": "MED_START",
+        "text": "ما بديتها للحين",
+        "expected": "NO",
+        "got": "UNSURE",
+        "confidence": 0.43,
+        "safe": true,
+        "cues": [
+          "neg+بديتها→NO",
+          "للحين→YES",
+          "conflict: YES 0.7 vs 0.85"
+        ]
+      },
+      {
+        "id": "u015",
+        "kind": "MED_START",
+        "text": "لا ما صرفوها لنا من الصيدليه للحين",
+        "expected": "NO",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "no:لا→NO",
+          "للحين→YES",
+          "conflict: YES 0.7 vs 0.9"
+        ]
+      },
+      {
+        "id": "u018",
+        "kind": "MED_START",
+        "text": "والله ما شفت دوا جديد",
+        "expected": "NO",
+        "got": "UNKNOWN",
+        "confidence": 0.2,
+        "safe": true,
+        "cues": [
+          "no answer cue found"
+        ]
+      },
+      {
+        "id": "u035",
+        "kind": "MED_CONTINUE",
+        "text": "ايه بس امس نسيتها",
+        "expected": "YES",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "yes:ايه→YES",
+          "نسيتها→NO",
+          "conflict: NO 0.35 vs 0.9",
+          "historical report does not establish current use"
+        ]
+      },
+      {
+        "id": "u087",
+        "kind": "DOSE_CHECK",
+        "text": "صرت اخذ ١٤ وحده بالليل",
+        "expected": "NEW_DOSE",
+        "got": "UNKNOWN",
+        "confidence": 0.2,
+        "safe": true,
+        "cues": [
+          "no answer cue found"
+        ]
+      },
+      {
+        "id": "u088",
+        "kind": "DOSE_CHECK",
+        "text": "ابوي ياخذ الجرعه اللي قالوا عليها بالمستشفى",
+        "expected": "NEW_DOSE",
+        "got": "UNKNOWN",
+        "confidence": 0.2,
+        "safe": true,
+        "cues": [
+          "no answer cue found"
+        ]
+      },
+      {
+        "id": "u092",
+        "kind": "DOSE_CHECK",
+        "text": "لا",
+        "expected": "OLD_DOSE",
+        "got": "NO",
+        "confidence": 0.9,
+        "safe": false,
+        "cues": [
+          "no:لا→NO"
+        ]
+      },
+      {
+        "id": "u094",
+        "kind": "DOSE_CHECK",
+        "text": "ما غيرت شي",
+        "expected": "OLD_DOSE",
+        "got": "NO",
+        "confidence": 0.8,
+        "safe": false,
+        "cues": [
+          "neg+غيرت→NO"
+        ]
+      },
+      {
+        "id": "u104",
+        "kind": "DOSE_CHECK",
+        "text": "السكر امس كان مرتفع شوي",
+        "expected": "UNKNOWN",
+        "got": "UNSURE",
+        "confidence": 0.2,
+        "safe": true,
+        "cues": [
+          "no answer cue found",
+          "historical report does not establish current use"
+        ]
+      },
+      {
+        "id": "u113",
+        "kind": "OPEN_MEDS",
+        "text": "ايه اخذ بنادول اذا تعبت",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "med:بنادول→paracetamol",
+          "yes:ايه→MENTIONS_MEDS",
+          "اخذ→MENTIONS_MEDS"
+        ]
+      },
+      {
+        "id": "u117",
+        "kind": "OPEN_MEDS",
+        "text": "ابوي ياخذ الاسبرين من زمان من نفسه",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "med:الاسبرين→aspirin",
+          "ياخذ→MENTIONS_MEDS"
+        ]
+      },
+      {
+        "id": "u118",
+        "kind": "OPEN_MEDS",
+        "text": "ايه بنادول وحبه المعده",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "med:وحبه المعده→esomeprazole|omeprazole",
+          "med:بنادول→paracetamol",
+          "yes:ايه→MENTIONS_MEDS"
+        ]
+      },
+      {
+        "id": "u120",
+        "kind": "OPEN_MEDS",
+        "text": "يمكن بنادول مره وحده",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.29,
+        "safe": true,
+        "cues": [
+          "med:بنادول→paracetamol",
+          "unsure:يمكن",
+          "conflict: UNSURE 1 vs 1.21"
+        ]
+      },
+      {
+        "id": "u123",
+        "kind": "OPEN_MEDS",
+        "text": "ايه المسكن اللي عطونا اياه بالطوارئ",
+        "expected": "MENTIONS_MEDS",
+        "got": "UNSURE",
+        "confidence": 0.45,
+        "safe": true,
+        "cues": [
+          "med:المسكن→ibuprofen|paracetamol|paracetamol-codeine|tramadol",
+          "yes:ايه→MENTIONS_MEDS"
+        ]
+      }
+    ]
+  }
+}

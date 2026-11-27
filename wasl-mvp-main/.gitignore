@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+coverage/
+
+# logs
+*.log
+npm-debug.log*
+
+# env / local
+.env
+.env.*
+!.env.example
+*.local
+
+# editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# visual check output
+/screenshots/
+
+# Keep documentation screenshots (only the root-level folder above is ignored)
+!docs/screenshots/

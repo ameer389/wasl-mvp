@@ -1,0 +1,25 @@
+[
+  {
+    "name": "get_current_question",
+    "description": "Read the currently displayed, eligible WASL question. Ask only its wording and keep its question_ref for the next proposal.",
+    "parameters": { "type": "object", "properties": { "scope": { "type": "string", "enum": ["current_checkin"] } }, "required": ["scope"], "additionalProperties": false }
+  },
+  {
+    "name": "propose_patient_answer",
+    "description": "Propose the meaning of the last actual spoken patient answer after asking the current WASL question. Do not call for silence or a confirmation. The app validates the transcript and the patient confirms on screen.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question_ref": { "type": "string" },
+        "intent": { "type": "string", "enum": ["YES", "NO", "UNSURE", "STOPPED", "NEVER_STARTED", "STILL_TAKING", "NEW_DOSE", "OLD_DOSE", "NONE", "MENTIONS_MEDS"] }
+      },
+      "required": ["question_ref", "intent"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_answer_status",
+    "description": "Read whether WASL persisted the current proposal. Check once after the patient indicates they used the on-screen confirmation. Only report success when the returned status is recorded.",
+    "parameters": { "type": "object", "properties": { "question_ref": { "type": "string" } }, "required": ["question_ref"], "additionalProperties": false }
+  }
+]

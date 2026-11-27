@@ -1,0 +1,22 @@
+[
+  {
+    "name": "get_demo_context",
+    "description": "Read the simulated day and the current number of planned questions from the open WASL demo. Call this when asked about the demo context. It cannot save or change anything.",
+    "parameters": {
+      "type": "object",
+      "properties": { "scope": { "type": "string", "enum": ["current_demo"] } },
+      "required": ["scope"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_demo_question",
+    "description": "Read the first planned synthetic check-in question currently shown by WASL. Call this when asked which question WASL has planned. If no question is available, say so. This is informational only and no answer is saved.",
+    "parameters": {
+      "type": "object",
+      "properties": { "scope": { "type": "string", "enum": ["current_demo"] } },
+      "required": ["scope"],
+      "additionalProperties": false
+    }
+  }
+]

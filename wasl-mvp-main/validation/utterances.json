@@ -1,0 +1,2124 @@
+{
+  "name": "WASL Saudi-dialect check-in answers",
+  "version": 1,
+  "description": "Synthetic, hand-written answers in the style of Saudi patients and family members replying to WASL check-in questions. Not real patients. Written before the parser existed. Labels describe what the speaker means, not what any parser can detect.",
+  "questions": {
+    "MED_START": "بديت الدواء الجديد <دواء>؟",
+    "MED_CONTINUE": "للحين مستمر على <دواء>؟",
+    "STOPPED_CHECK": "وقّفت <دواء> زي ما قال لك الدكتور؟",
+    "DOSE_CHECK": "تاخذ <دواء> على الجرعة الجديدة اللي في ورقة الخروج؟",
+    "OPEN_MEDS": "فيه أي دواء ثاني تاخذه ما ذكرناه؟"
+  },
+  "labellingRules": [
+    "expectedIntent = what the speaker means as an answer to the question exactly as worded above.",
+    "Hedged answers (اظن، يمكن، مو متأكد) are UNSURE even when they lean yes or no — except OPEN_MEDS, where any medicine mention is MENTIONS_MEDS (a mention must reach a clinician).",
+    "Partial adherence (مو كل يوم، ساعات اخذها وساعات لا) to a \"still taking / started?\" question is NO.",
+    "\"Yes, but I forgot yesterday\" to a start/continue question is YES (the medicine was started / is being continued).",
+    "STOPPED_CHECK: a yes to \"did you stop?\" is STOPPED; a no, or still taking, is STILL_TAKING.",
+    "DOSE_CHECK: a yes to \"on the new dose?\" is NEW_DOSE; a no, or still on the previous dose, is OLD_DOSE.",
+    "UNKNOWN = the reply does not answer the question (off-topic, filler, a question back).",
+    "expectedMeds = drug ids the text names unambiguously (generic, brand, or an informal name that refers to exactly one drug in the demo dictionary). Shared informal names (حبة الضغط، حبة السيولة، حبوب المعدة، حبوب السكر، المسكن) and herbs are not listed.",
+    "tags: \"hard\" marks items a human would still find tricky or that need knowledge beyond the words (numbers, brands, buried intent)."
+  ],
+  "items": [
+    {
+      "id": "u001",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "apixaban"
+      },
+      "text": "ايه",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u002",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "furosemide"
+      },
+      "text": "اي والله بديتها من امس",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u003",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amlodipine"
+      },
+      "text": "ايوه الحمدلله بديت فيها",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u004",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "prednisolone"
+      },
+      "text": "تمام بديت",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u005",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "paracetamol-codeine"
+      },
+      "text": "اكيد يا ولدي بديتها اول ما طلعت",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u006",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amoxicillin-clavulanate"
+      },
+      "text": "ابوي بدا فيها من يوم طلع من المستشفي",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family",
+        "stt_noise"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u007",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "apixaban"
+      },
+      "text": "ايه بس نسيت امس",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u008",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "apixaban"
+      },
+      "text": "اي بديت حبة السيوله الصبح",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "informal_name",
+        "stt_noise"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u009",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "furosemide"
+      },
+      "text": "ايوة يعني بديت فيها طيب بس للحين احس بدوخه شوي ما ادري منها ولا من الضغط",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "rambling",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u010",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amlodipine"
+      },
+      "text": "بديتهاالحمدلله",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "stt_noise",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u011",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "prednisolone"
+      },
+      "text": "لا",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u012",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "paracetamol-codeine"
+      },
+      "text": "لا والله ما بديتها",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "negation_trap"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u013",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amoxicillin-clavulanate"
+      },
+      "text": "ما بديتها للحين",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u014",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "apixaban"
+      },
+      "text": "لا ابد ما اخذها",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "negation_trap"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u015",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "furosemide"
+      },
+      "text": "لا ما صرفوها لنا من الصيدليه للحين",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u016",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amlodipine"
+      },
+      "text": "امي ما بدت فيها ننتظر الدكتور يكلمنا",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "hijazi",
+      "tags": [
+        "family",
+        "negation_trap"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u017",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "prednisolone"
+      },
+      "text": "لا يا بنتي خفت منها وما اخذتها",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "southern",
+      "tags": [
+        "negation_trap"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u018",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "paracetamol-codeine"
+      },
+      "text": "والله ما شفت دوا جديد",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "southern",
+      "tags": [
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u019",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amoxicillin-clavulanate"
+      },
+      "text": "لاء",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain",
+        "stt_noise"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u020",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "apixaban"
+      },
+      "text": "مدري",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u021",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "furosemide"
+      },
+      "text": "ما ادري والله",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u022",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amlodipine"
+      },
+      "text": "مو متاكد",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty",
+        "stt_noise"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u023",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "prednisolone"
+      },
+      "text": "اظن بديت بس مو متأكد",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u024",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "paracetamol-codeine"
+      },
+      "text": "يمكن، الولد هو اللي يعطيه الدوا",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u025",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amoxicillin-clavulanate"
+      },
+      "text": "والله ما اعرف الحبوب كلها شكل بعض",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "southern",
+      "tags": [
+        "uncertainty",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u026",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "apixaban"
+      },
+      "text": "مادري يعني",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty",
+        "stt_noise"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u027",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "furosemide"
+      },
+      "text": "كم الساعه الحين",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "off_topic"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u028",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "amlodipine"
+      },
+      "text": "الحمدلله على كل حال",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "off_topic",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u029",
+      "questionKind": "MED_START",
+      "context": {
+        "drugId": "prednisolone"
+      },
+      "text": "الدكتور قال اجي بعد اسبوع",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "off_topic",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u030",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "aspirin"
+      },
+      "text": "ايه مستمر",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u031",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "bisoprolol"
+      },
+      "text": "اي كل يوم الصبح",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u032",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "metformin"
+      },
+      "text": "ايوه ما وقفتها",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u033",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "atorvastatin"
+      },
+      "text": "تمام الحمدلله",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u034",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "omeprazole"
+      },
+      "text": "ابوي ياخذها كل يوم انا اعطيه بيدي",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u035",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "levothyroxine"
+      },
+      "text": "ايه بس امس نسيتها",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u036",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "aspirin"
+      },
+      "text": "مستمر عليها يعني ما فيه شي تغير",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u037",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "bisoprolol"
+      },
+      "text": "اي والله مستمره عليها",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u038",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "metformin"
+      },
+      "text": "اكيد ما اقدر اوقفها",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "southern",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u039",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "bisoprolol"
+      },
+      "text": "ايه حبه الضغط ما تركتها",
+      "expectedIntent": "YES",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "informal_name",
+        "negation_trap",
+        "stt_noise"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u040",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "atorvastatin"
+      },
+      "text": "لا وقفتها",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u041",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "omeprazole"
+      },
+      "text": "لا",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u042",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "levothyroxine"
+      },
+      "text": "مو كل يوم",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u043",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "aspirin"
+      },
+      "text": "خلصت الحبوب وما جبت غيرها",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u044",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "bisoprolol"
+      },
+      "text": "لا والله تركتها تعبتني",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "southern",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u045",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "metformin"
+      },
+      "text": "امي ما عادت تاخذها من يوم طلعت",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family",
+        "negation_trap"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u046",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "atorvastatin"
+      },
+      "text": "ساعات اخذها وساعات لا",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u047",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "omeprazole"
+      },
+      "text": "لا ابد",
+      "expectedIntent": "NO",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u048",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "levothyroxine"
+      },
+      "text": "مدري والله الوالده هي اللي تعرف",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty",
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u049",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "aspirin"
+      },
+      "text": "اظن ايه",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u050",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "bisoprolol"
+      },
+      "text": "يمكن",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u051",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "metformin"
+      },
+      "text": "ما اذكر اذا اخذتها اليوم",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u052",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "atorvastatin"
+      },
+      "text": "الولد هو اللي يعطيه ما ادري",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty",
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u053",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "omeprazole"
+      },
+      "text": "مو متأكد والله يمكن ايه",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u054",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "levothyroxine"
+      },
+      "text": "وش هي ذي",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "off_topic"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u055",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "aspirin"
+      },
+      "text": "طيب",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "short",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u056",
+      "questionKind": "MED_CONTINUE",
+      "context": {
+        "drugId": "bisoprolol"
+      },
+      "text": "الجو حار اليوم",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "off_topic"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u057",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "ايه وقفتها",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u058",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "اي والله وقفناها",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u059",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "امي وقفناها",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "hijazi",
+      "tags": [
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u060",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "ما عاد اخذها",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u061",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "خلاص تركتها من يوم الدكتور قال",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u062",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "ايوه",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u063",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "اكيد ما اخذها الحين",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u064",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "وقفتها الحمدلله بس ابي اسال الدكتور ليش وقفوها",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "rambling"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u065",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "ابد ما عاد ياخذها ابوي",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family",
+        "negation_trap"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u066",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "شلناها من علبة الدوا",
+      "expectedIntent": "STOPPED",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "hijazi",
+      "tags": [
+        "family",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u067",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "لا",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u068",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "ما وقفتها",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u069",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "لا للحين اخذها",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u070",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "ابوي للحين ياخذ البلافكس",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [
+        "clopidogrel"
+      ],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family",
+        "informal_name"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u071",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "لا والله ما وقفت ما احد قال لي",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "southern",
+      "tags": [
+        "negation_trap"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u072",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "باقي اخذها كل يوم",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u073",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "لا ما دريت انها توقف",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u074",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "للحين نعطيه حبة السيوله القديمه مع الجديده",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family",
+        "informal_name",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u075",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "ماوقفتها",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap",
+        "stt_noise"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u076",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "مستمر عليها عادي",
+      "expectedIntent": "STILL_TAKING",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u077",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "مدري الصراحه",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u078",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "مو متأكد اي وحده المفروض اوقف",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u079",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "اظن وقفتها",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u080",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "clopidogrel"
+      },
+      "text": "الولد هو اللي يعطيه اسأله",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty",
+        "family"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u081",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "losartan"
+      },
+      "text": "وش اسمها هذي",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "off_topic"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u082",
+      "questionKind": "STOPPED_CHECK",
+      "context": {
+        "drugId": "ibuprofen"
+      },
+      "text": "يعني",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "short"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u083",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "ايه على الجديده",
+      "expectedIntent": "NEW_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain",
+        "stt_noise"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u084",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "اي الجرعه الجديده اربعطعش وحده",
+      "expectedIntent": "NEW_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u085",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "ايوه زي ما كتبوا في الورقه",
+      "expectedIntent": "NEW_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u086",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "تمام غيرتها",
+      "expectedIntent": "NEW_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u087",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "صرت اخذ ١٤ وحده بالليل",
+      "expectedIntent": "NEW_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u088",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "ابوي ياخذ الجرعه اللي قالوا عليها بالمستشفى",
+      "expectedIntent": "NEW_DOSE",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u089",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "ايه نزلتها مثل ما قال الدكتور",
+      "expectedIntent": "NEW_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u090",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "لا على القديمه",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u091",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "لا انا على العشرين وحده زي قبل",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u092",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "لا",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u093",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "باقي على نفس الجرعه",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u094",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "ما غيرت شي",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u095",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "ابوي للحين ياخذ مثل اول",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u096",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "والله ما انتبهت انهم غيروها اخذ مثل ما كنت اخذ",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "southern",
+      "tags": [
+        "negation_trap",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u097",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "مازلت على الجرعه القديمه",
+      "expectedIntent": "OLD_DOSE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "stt_noise"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u098",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "مدري كم الجرعه",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u099",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "ما ادري والله الممرضه هي اللي تضبطها",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u100",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "اظن الجديده",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u101",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "مو متأكد من الرقم",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u102",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "الابره توجعني",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "off_topic",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u103",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "طيب",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "short",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u104",
+      "questionKind": "DOSE_CHECK",
+      "context": {
+        "drugId": "insulin-glargine"
+      },
+      "text": "السكر امس كان مرتفع شوي",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "off_topic",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u105",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "لا",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u106",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "لا بس هذي",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u107",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "لا والله بس اللي كتبه الدكتور",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u108",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "ما فيه شي ثاني",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "plain"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u109",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "لا ابد",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u110",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "لا كذا تمام",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "plain"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u111",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "بس اللي في الورقه",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u112",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "لا ولا شي ابوي ما ياخذ غير اللي عطوه",
+      "expectedIntent": "NONE",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u113",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "ايه اخذ بنادول اذا تعبت",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "paracetamol"
+      ],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "informal_name"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u114",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "حبة الضغط القديمة وحبوب المعدة",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "informal_name",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u115",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "اخذ بروفين للركبه",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "ibuprofen"
+      ],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "informal_name"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u116",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "البخاخ بس اذا ضاق نفسي",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "salbutamol"
+      ],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "informal_name"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u117",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "ابوي ياخذ الاسبرين من زمان من نفسه",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "aspirin"
+      ],
+      "speaker": "family",
+      "dialect": "najdi",
+      "tags": [
+        "family"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u118",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "ايه بنادول وحبه المعده",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "paracetamol"
+      ],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "informal_name",
+        "stt_noise"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u119",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "اخذ حبوب السكر حقتي جلوكوفاج",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "metformin"
+      ],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "informal_name"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u120",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "يمكن بنادول مره وحده",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "paracetamol"
+      ],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u121",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "لا ايه صح نسيت اخذ نكسيوم الصبح",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "esomeprazole"
+      ],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "rambling",
+        "hard"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u122",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "امي تاخذ اعشاب مرميه وحبة البركه",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "southern",
+      "tags": [
+        "family",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u123",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "ايه المسكن اللي عطونا اياه بالطوارئ",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [],
+      "speaker": "family",
+      "dialect": "general",
+      "tags": [
+        "family",
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u124",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "بلافكس",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "clopidogrel"
+      ],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "short"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u125",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "اخذ فيفادول للصداع",
+      "expectedIntent": "MENTIONS_MEDS",
+      "expectedMeds": [
+        "paracetamol"
+      ],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "hard"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u126",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "مدري يمكن فيه بس ما اذكر اسمه",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u127",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "والله ما ادري اسأل بنتي",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "dev"
+    },
+    {
+      "id": "u128",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "ما اتذكر",
+      "expectedIntent": "UNSURE",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "hijazi",
+      "tags": [
+        "uncertainty"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u129",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "وش تقصد",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "najdi",
+      "tags": [
+        "off_topic"
+      ],
+      "split": "test"
+    },
+    {
+      "id": "u130",
+      "questionKind": "OPEN_MEDS",
+      "context": {},
+      "text": "ابي اكلم الدكتور",
+      "expectedIntent": "UNKNOWN",
+      "expectedMeds": [],
+      "speaker": "patient",
+      "dialect": "general",
+      "tags": [
+        "off_topic",
+        "hard"
+      ],
+      "split": "dev"
+    }
+  ]
+}
