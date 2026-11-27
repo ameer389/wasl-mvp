@@ -9,9 +9,10 @@
  *                    └─SAVED (quick button) ─┐   echo ─SAVED→ saved ─NEXT→ question(i+1) | done
  */
 import { answerToEvidence, type AnswerIntent, type MedMention, type ParseResult } from './arabicParser';
-import { SOURCE_LABEL } from './gapEngine';
+import { SOURCE_LABEL, VERIFY_THRESHOLD } from './gapEngine';
 import { CLAIM_LABEL } from './labels';
-import type { Evidence, EvidenceSource, Gap, Question, QuestionKind } from './types';
+import { confirmTranscript } from './speechAnswer';
+import type { Evidence, EvidenceSource, Gap, OpenMedsOutcome, Question, QuestionKind } from './types';
 
 // ── Quick answer buttons ────────────────────────────────────────────────────
 
@@ -63,7 +64,10 @@ export function sourceFor(mode: AnswerMode, family: boolean): EvidenceSource {
 
 /** Does this parse need a human to look (low confidence, unsure, not understood)? */
 export function needsHuman(parse: ParseResult): boolean {
-  return parse.confidence < 0.7 || parse.intent === 'UNSURE' || parse.intent === 'UNKNOWN';
+  if (parse.extractionDiscarded) return false;
+  return parse.confidence < VERIFY_THRESHOLD || parse.intent === 'UNSURE' || parse.intent === 'UNKNOWN' || parse.intent === 'NEVER_STARTED' ||
+    !!parse.statements?.some((statement) => statement.use === 'uncertain' || statement.use === 'mention' || statement.use === 'historical') ||
+    (parse.intent === 'MENTIONS_MEDS' && (parse.ambiguousMeds.length > 0 || parse.meds.length === 0));
 }
 
 export interface AnswerEvidenceArgs {
@@ -76,31 +80,55 @@ export interface AnswerEvidenceArgs {
   /** The patient's own day since discharge. */
   day: number;
   idPrefix: string;
+  transcriptConfirmed?: boolean;
 }
 
 /** Evidence records for one answer (claims via toEvidenceClaim). Empty for "no other medicines". */
 export function evidenceForAnswer(a: AnswerEvidenceArgs): Evidence[] {
-  return answerToEvidence(a.rawText, a.parse, {
+  const parse = a.transcriptConfirmed ? confirmTranscript(a.parse) : a.parse;
+  const speech = a.mode === 'voice' ? parse.speech : undefined;
+  return answerToEvidence(a.rawText, parse, {
     questionKind: a.question.kind,
     patientId: a.patientId,
     ...(a.question.taskId ? { taskId: a.question.taskId } : {}),
+    ...(a.question.drugId ? { expectedDrugId: a.question.drugId } : {}),
     day: a.day,
     source: sourceFor(a.mode, a.family),
     idPrefix: a.idPrefix,
+    ...(speech ? { voice: {
+      ...(speech.recognitionConfidence !== undefined ? { recognitionConfidence: speech.recognitionConfidence } : {}),
+      interpretationConfidence: speech.interpretationConfidence,
+      transcriptConfirmed: !!a.transcriptConfirmed && !speech.conflict,
+      ...(speech.conflict ? { alternativesDisagreed: true as const } : {}),
+    } } : {}),
   });
 }
 
 /** One-line English note for the audit entry of a saved answer. */
-export function answerAuditNote(evidence: readonly Evidence[], mode: AnswerMode, family: boolean): string {
+export function answerAuditNote(evidence: readonly Evidence[], mode: AnswerMode, family: boolean, discardedText?: string): string {
   const source = SOURCE_LABEL[sourceFor(mode, family)];
-  if (evidence.length === 0) return `${source}: no other medicines`;
+  if (evidence.length === 0) return discardedText === undefined
+    ? `${source}: no other medicines` : `${source}: patient discarded extracted names · «${discardedText}»`;
   const claims = evidence.map((e) => `${CLAIM_LABEL[e.claim]} ${Math.round(e.confidence * 100)}%`).join(', ');
   return `${source} (${mode}): ${claims}`;
 }
 
+export function openMedsOutcome(parse: ParseResult, evidence: readonly Evidence[]): OpenMedsOutcome {
+  if (parse.extractionDiscarded) return 'DISCARDED';
+  if (!evidence.length) return 'NONE';
+  if (evidence.some((e) => e.claim === 'UNSURE')) return 'UNCERTAIN';
+  if (evidence.some((e) => e.claim === 'TAKING_UNLISTED' && !e.drugId)) return 'UNKNOWN_MEDICINE';
+  return 'REPORTED';
+}
+
 /** OPEN_MEDS: keep only the medicine chips the person left in place. */
 export function withKeptMeds(parse: ParseResult, keptMeds: readonly string[], keptAmbiguous: readonly MedMention[]): ParseResult {
-  return { ...parse, meds: parse.meds.filter((m) => keptMeds.includes(m)), ambiguousMeds: parse.ambiguousMeds.filter((m) => keptAmbiguous.includes(m)) };
+  const meds = parse.meds.filter((m) => keptMeds.includes(m));
+  const ambiguousMeds = parse.ambiguousMeds.filter((m) => keptAmbiguous.includes(m));
+  const statements = parse.statements?.filter((s) => s.drugIds.length === 1
+    ? meds.includes(s.drugIds[0]!) : ambiguousMeds.some((m) => m.text === s.text));
+  const extractionDiscarded = (parse.meds.length + parse.ambiguousMeds.length > 0) && !meds.length && !ambiguousMeds.length && !parse.unknownUse;
+  return { ...parse, meds, ambiguousMeds, statements, extractionDiscarded };
 }
 
 /** Gaps routed to clinicians that this check-in's answers touched (for the done screen). */
@@ -119,6 +147,7 @@ export interface PendingAnswer {
   text: string;
   mode: 'voice' | 'text';
   asrConfidence?: number;
+  recognitionParse?: ParseResult;
   parse?: ParseResult;
   keptMeds: string[];
   keptAmbiguous: MedMention[];
@@ -144,10 +173,11 @@ export interface CheckinState {
 }
 
 export type CheckinEvent =
+  | { type: 'PROPOSE_VOICE'; text: string; parse: ParseResult }
   | { type: 'START' }
   | { type: 'LISTEN_START' }
   | { type: 'LISTEN_INTERIM'; text: string }
-  | { type: 'LISTEN_FINAL'; text: string; asrConfidence?: number }
+  | { type: 'LISTEN_FINAL'; text: string; asrConfidence?: number; parse?: ParseResult }
   | { type: 'LISTEN_ERROR'; error: VoiceError }
   | { type: 'LISTEN_CANCEL' }
   | { type: 'SUBMIT_TEXT'; text: string }
@@ -174,6 +204,13 @@ const toQuestion = (s: CheckinState, index: number): CheckinState => ({
 
 export function checkinReducer(s: CheckinState, e: CheckinEvent): CheckinState {
   switch (e.type) {
+    case 'PROPOSE_VOICE':
+      if (s.phase !== 'question') return s;
+      return checkinReducer({
+        ...s, phase: 'understanding',
+        answer: { text: e.text, mode: 'voice', keptMeds: [], keptAmbiguous: [] },
+      }, { type: 'PARSED', parse: e.parse });
+
     case 'START':
       if (s.phase !== 'intro') return s;
       return s.total === 0 ? { ...s, phase: 'done' } : toQuestion(s, 0);
@@ -193,7 +230,7 @@ export function checkinReducer(s: CheckinState, e: CheckinEvent): CheckinState {
         ...s,
         phase: 'understanding',
         transcript: text,
-        answer: { text, mode: 'voice', ...(e.asrConfidence !== undefined ? { asrConfidence: e.asrConfidence } : {}), keptMeds: [], keptAmbiguous: [] },
+        answer: { text, mode: 'voice', ...(e.asrConfidence !== undefined ? { asrConfidence: e.asrConfidence } : {}), ...(e.parse ? { recognitionParse: e.parse } : {}), keptMeds: [], keptAmbiguous: [] },
       };
     }
 

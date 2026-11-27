@@ -16,31 +16,31 @@ const STAGES: Stage[] = [
     title: 'The discharge plan, made executable',
     body: 'Each instruction becomes a task with an owner, a deadline and a risk level.',
     examples: [
-      { text: 'Start new anticoagulant · day 0' },
-      { text: 'Stop old home medication · day 0' },
+      { text: 'New medicine start check · by day 1' },
+      { text: 'Stopped medicine check · by day 1' },
       { text: 'Kidney function lab · by day 5' },
       { text: 'Follow-up clinic visit · by day 7' },
     ],
   },
   {
     label: 'Home',
-    title: 'What really happens at home',
-    body: 'Short check-ins in Saudi dialect — by voice or big buttons — plus simulated EHR, lab and appointment feeds.',
+    title: 'Reports from home',
+    body: 'Short check-ins in Saudi Arabic using voice, text or quick answers, plus simulated EHR, lab and appointment feeds.',
     examples: [{ text: '«الحبوب الجديدة بديتها، بس المختبر ما رحت له»', lang: 'ar' }, { text: 'Lab feed: no result received' }],
   },
   {
     label: 'Actual',
-    title: 'Only the gaps that need a clinician',
-    body: 'Expected and actual are compared continuously. Unresolved gaps are ranked by risk, with evidence and the rule that fired.',
-    examples: [{ text: 'Kidney lab not done by day 5 → high risk' }, { text: '3 tasks verified · nothing to ask' }],
+    title: 'Gaps and their supporting evidence',
+    body: 'WASL compares the plan with eligible evidence and ranks open gaps by risk. Each gap explains the rule that fired.',
+    examples: [{ text: 'Kidney lab result unavailable after day 5' }, { text: '3 tasks verified · 1 item for review' }],
   },
 ];
 
 const PRINCIPLES: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: Eye, title: 'Ask only what is uncertain', text: 'Feeds verify what they can; the patient is asked only about the rest.' },
-  { icon: UserCheck, title: 'A human decides', text: 'WASL never prescribes, doses or diagnoses. It routes gaps to a clinician.' },
+  { icon: Eye, title: 'Adaptive check-in', text: 'Eligible unresolved tasks guide what the planner asks the patient.' },
+  { icon: UserCheck, title: 'A human decides', text: 'The demo prioritises gaps for clinician review or in-app follow-up. Clinicians document decisions.' },
   { icon: ShieldCheck, title: 'Explainable', text: 'Every gap shows the expected task, the evidence and the rule that fired.' },
-  { icon: Database, title: 'Not another EHR', text: 'An execution and verification layer on top of existing records.' },
+  { icon: Database, title: 'Simulated records', text: 'The demo uses synthetic plans, reports and feed records.' },
 ];
 
 export default function About() {
@@ -49,8 +49,8 @@ export default function About() {
       <section className="flex flex-col gap-2">
         <h2 className="text-2xl font-semibold">Close the care loop after discharge.</h2>
         <p className="max-w-3xl text-sm text-muted">
-          WASL turns discharge instructions into verified recovery actions. It compares what was expected to happen
-          with what actually happened at home, and surfaces only the gaps that need a clinician.
+          WASL turns discharge instructions into tasks. It compares the plan with eligible reports and simulated records,
+          then surfaces gaps for review or in-app follow-up.
         </p>
       </section>
 

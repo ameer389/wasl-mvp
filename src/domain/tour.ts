@@ -53,7 +53,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'checkin',
     title: 'A daily check-in at home',
-    body: 'Every day, the patient or family answers a few questions, by voice in Saudi dialect or with big buttons. Only what is still uncertain is asked.',
+    body: 'The patient or family can answer a short check-in using Saudi Arabic voice input, text or buttons. The planner selects eligible unresolved tasks.',
     route: `/patient/${TOUR_PATIENT_ID}/checkin`,
     target: 'checkin',
     day: 2,
@@ -62,7 +62,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'queue',
     title: 'Day 4: what needs a clinician',
-    body: 'WASL compared expected vs actual: the family is still giving clopidogrel, which was stopped. It is ranked first because it is high-risk.',
+    body: 'A pre-seeded day 2 family report says clopidogrel was still being taken after it was listed to stop. Day 4 in the tour shows the high-risk gap on the queue.',
     route: '/clinician',
     target: 'queue-top',
     day: 4,

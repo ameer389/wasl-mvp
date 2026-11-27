@@ -62,7 +62,7 @@ describe('negation depends on the question kind', () => {
   });
 
   it('DOSE_CHECK («على الجرعة الجديدة؟»)', () => {
-    expect(intent('ما غيرناها', 'DOSE_CHECK')).toBe('OLD_DOSE');
+    expect(intent('ما غيرناها', 'DOSE_CHECK')).toBe('NO');
     expect(intent('صرنا على الجرعه الجديده', 'DOSE_CHECK')).toBe('NEW_DOSE');
     expect(intent('لا باقي على القديم', 'DOSE_CHECK')).toBe('OLD_DOSE');
   });
@@ -149,13 +149,14 @@ describe('toEvidenceClaim', () => {
     expect(claimFor('ايه رحت', 'YES_NO')[0]?.claim).toBe('DONE');
   });
 
-  it('OPEN_MEDS: one TAKING_UNLISTED per medicine, ambiguous ones without drugId, NONE → nothing', () => {
+  it('OPEN_MEDS: named usage and ambiguous candidates are different claims; NONE → nothing', () => {
     const drafts = claimFor('اخذ بنادول وحبة المعده', 'OPEN_MEDS');
     expect(drafts.map((d) => [d.claim, d.drugId ?? null])).toEqual([
       ['TAKING_UNLISTED', 'paracetamol'],
-      ['TAKING_UNLISTED', null],
+      ['UNSURE', null],
     ]);
     expect(drafts[1]?.detail).toContain('Omeprazole');
+    expect(drafts[1]?.candidateDrugIds).toEqual(['esomeprazole', 'omeprazole']);
     expect(claimFor('لا ما فيه شي', 'OPEN_MEDS')).toEqual([]);
   });
 
@@ -172,8 +173,8 @@ describe('question planner ↔ parser kinds', () => {
   it('demo-001 questions use the kinds the parser understands', () => {
     const p = SAMPLE_PATIENTS[0]!;
     const tasks = buildCareGraph(p);
-    const { taskStatus } = evaluate(p, tasks, [], [], 0);
-    const kinds = planQuestions(p, tasks, [], taskStatus, 0).questions.map((q) => q.kind);
+    const evaluation = evaluate(p, tasks, [], [], 0);
+    const kinds = planQuestions(p, tasks, [], evaluation, 0).questions.map((q) => q.kind);
     expect(kinds).toEqual(['MED_START', 'STOPPED_CHECK', 'OPEN_MEDS']);
   });
 });

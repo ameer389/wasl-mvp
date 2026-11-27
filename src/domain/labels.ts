@@ -1,24 +1,27 @@
 /** Plain-English labels for the care team console. Descriptive only. */
 import { getDrug } from './drugs';
-import type { CareTask, EvidenceClaim, Gap, GapRoute, GapType, Patient, Risk, TaskStatus, TaskType } from './types';
+import { isOpenMedicationReport, VERIFY_THRESHOLD } from './medicationEvidence';
+import type { CareTask, Evidence, EvidenceClaim, Gap, GapRoute, GapType, Patient, Risk, TaskStatus, TaskType } from './types';
 
 export const GAP_TYPE_LABEL: Record<GapType, string> = {
-  NOT_STARTED: 'New medicine not started',
-  STOPPED_STILL_TAKEN: 'Stopped medicine still being taken',
-  WRONG_DOSE: 'Previous dose still in use',
+  NOT_STARTED: 'New medicine reported not started',
+  STOPPED_STILL_TAKEN: 'Stopped medicine reported in use',
+  WRONG_DOSE: 'Previous dose reported in use',
   DUPLICATE_THERAPY: 'Possible duplicate therapy',
-  UNLISTED_MED: 'Medicine not on the discharge list',
-  LAB_MISSED: 'Lab test not done',
-  FOLLOWUP_NOT_BOOKED: 'Follow-up not booked',
-  FOLLOWUP_MISSED: 'Follow-up visit missed',
+  UNLISTED_MED: 'Medicine identity or plan match needs review',
+  LAB_MISSED: 'Lab result unavailable',
+  FOLLOWUP_NOT_BOOKED: 'Follow-up booking unconfirmed',
+  FOLLOWUP_MISSED: 'Follow-up reported missed',
+  FOLLOWUP_ATTENDANCE_UNCONFIRMED: 'Follow-up attendance unconfirmed',
+  TASK_NOT_COMPLETED: 'Task reported incomplete',
   NO_RESPONSE: 'No response',
-  LOW_CONFIDENCE: 'Low-confidence answer: needs a human',
+  LOW_CONFIDENCE: 'Evidence needs clarification',
 };
 
 export const ROUTE_LABEL: Record<GapRoute, string> = {
   CLINICIAN_NOW: 'Now',
   CLINICIAN_24H: 'Within 24h',
-  PATIENT_REMINDER: 'Patient reminder',
+  PATIENT_REMINDER: 'In-app follow-up',
 };
 
 export const RISK_LABEL: Record<Risk, string> = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -40,6 +43,16 @@ export const CLAIM_LABEL: Record<EvidenceClaim, string> = {
   TAKING_UNLISTED: 'Taking an unlisted medicine',
   OLD_DOSE: 'Previous dose',
 };
+
+export function evidenceClaimLabel(e: Evidence): string {
+  if (e.eventKind === 'DISPENSED') return 'Dispensed';
+  if (e.eventKind === 'LAB_RESULT' && e.claim === 'DONE') return 'Lab result recorded';
+  if (e.eventKind === 'APPOINTMENT_BOOKING' && e.claim === 'DONE') return 'Booking recorded';
+  if (e.eventKind === 'APPOINTMENT_ATTENDANCE' && e.claim === 'DONE') return 'Attendance recorded';
+  if (isOpenMedicationReport(e) && (e.confidence < VERIFY_THRESHOLD || e.candidateDrugIds?.length)) return 'Unresolved report';
+  if (isOpenMedicationReport(e) && e.claim === 'STOPPED') return 'No current use reported';
+  return CLAIM_LABEL[e.claim];
+}
 
 export const OWNER_LABEL: Record<CareTask['owner'], string> = {
   patient: 'Patient',

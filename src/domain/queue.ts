@@ -1,5 +1,6 @@
 /** Care gaps worklist: filtering and grouping (pure). */
 import { normalizeArabic } from './arabicParser';
+import { ROUTE_ORDER } from './gapEngine';
 import type { Gap, GapRoute, GapType, Patient, Risk } from './types';
 
 export type QueueRow =
@@ -17,7 +18,6 @@ export type QueueRow =
     };
 
 const RISK_RANK: Record<Risk, number> = { high: 0, medium: 1, low: 2 };
-const ROUTE_RANK: Record<GapRoute, number> = { CLINICIAN_NOW: 0, CLINICIAN_24H: 1, PATIENT_REMINDER: 2 };
 
 /**
  * Turns sorted gaps into queue rows. Two or more NO_RESPONSE gaps for the same
@@ -47,8 +47,8 @@ export function buildQueueRows(sortedGaps: readonly Gap[]): QueueRow[] {
       type: 'NO_RESPONSE',
       gaps: group,
       risk: group.reduce((r, g) => (RISK_RANK[g.risk] < RISK_RANK[r] ? g.risk : r), group[0]!.risk),
-      route: group.reduce((r, g) => (ROUTE_RANK[g.route] < ROUTE_RANK[r] ? g.route : r), group[0]!.route),
-      priority: Math.max(...group.map((g) => g.priority)),
+      route: group.reduce((r, g) => (ROUTE_ORDER[g.route] < ROUTE_ORDER[r] ? g.route : r), group[0]!.route),
+      priority: group[0]!.priority,
       detectedDay: Math.min(...group.map((g) => g.detectedDay)),
     });
   }

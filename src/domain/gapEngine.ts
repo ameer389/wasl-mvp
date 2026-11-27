@@ -7,7 +7,14 @@
  * routed to a human. Reason strings are descriptive, never prescriptive.
  */
 import { findDuplicates, getDrug, requireDrug, type DuplicateMatch } from './drugs';
+import {
+  assessEvidence, isMedicationTask, isUncertainEvidence, medicationSourceEligible, openMedicationKey,
+  reconcileMedications, VERIFY_THRESHOLD, type EvidenceAssessment,
+} from './medicationEvidence';
+import { NO_RESPONSE_GRACE_DAYS } from './time';
+import { effectiveDecisions, gapObservations, lifecycleFor, type GapLifecycle } from './gapLifecycle';
 import type {
+  AuditEntry,
   CareTask,
   Day,
   Evidence,
@@ -25,7 +32,7 @@ import type {
 } from './types';
 
 /** Evidence below this confidence never verifies a task (hard floor, any source). */
-export const VERIFY_THRESHOLD = 0.7;
+export { VERIFY_THRESHOLD } from './medicationEvidence';
 
 export const SEVERITY: Record<GapType, number> = {
   STOPPED_STILL_TAKEN: 9,
@@ -33,6 +40,8 @@ export const SEVERITY: Record<GapType, number> = {
   NOT_STARTED: 8,
   WRONG_DOSE: 8,
   FOLLOWUP_MISSED: 6,
+  FOLLOWUP_ATTENDANCE_UNCONFIRMED: 5,
+  TASK_NOT_COMPLETED: 6,
   LAB_MISSED: 6,
   FOLLOWUP_NOT_BOOKED: 5,
   UNLISTED_MED: 5,
@@ -45,6 +54,7 @@ export const RISK_MULTIPLIER: Record<Risk, number> = { high: 2, medium: 1.3, low
 const SYSTEM_SOURCES: ReadonlySet<EvidenceSource> = new Set(['ehr', 'lab_system', 'appointment_system']);
 const PATIENT_SIDE_SOURCES: ReadonlySet<EvidenceSource> = new Set(['patient_voice', 'patient_app', 'family']);
 const PATIENT_OWNERS = new Set(['patient', 'family']);
+export const ROUTE_ORDER: Record<GapRoute, number> = { CLINICIAN_NOW: 0, CLINICIAN_24H: 1, PATIENT_REMINDER: 2 };
 
 /** Task types a system feed can verify, and which feed. */
 export const FEED_SOURCE_FOR: Partial<Record<TaskType, EvidenceSource>> = {
@@ -52,6 +62,24 @@ export const FEED_SOURCE_FOR: Partial<Record<TaskType, EvidenceSource>> = {
   FOLLOWUP_BOOKED: 'appointment_system',
   FOLLOWUP_ATTENDED: 'appointment_system',
 };
+
+const FEED_EVENT_FOR: Partial<Record<TaskType, Evidence['eventKind']>> = {
+  LAB_DONE: 'LAB_RESULT',
+  FOLLOWUP_BOOKED: 'APPOINTMENT_BOOKING',
+  FOLLOWUP_ATTENDED: 'APPOINTMENT_ATTENDANCE',
+};
+
+function isEligibleFeed(task: CareTask, evidence: Evidence): boolean {
+  if (evidence.source !== FEED_SOURCE_FOR[task.type] || evidence.drugId) return false;
+  if (evidence.eventKind !== undefined) return evidence.eventKind === FEED_EVENT_FOR[task.type];
+  // Legacy appointment records before the scheduled visit cannot establish attendance.
+  return task.type !== 'FOLLOWUP_ATTENDED' || evidence.day >= task.deadlineDay;
+}
+
+function directReport(evidence: Evidence): boolean {
+  return evidence.eventKind === undefined && !evidence.drugId &&
+    (isPatientSideSource(evidence.source) || (evidence.source === 'clinician' && evidence.confirmedByHuman));
+}
 
 export const SOURCE_LABEL: Record<EvidenceSource, string> = {
   patient_voice: 'Patient voice check-in',
@@ -76,24 +104,21 @@ export function verifyingClaim(type: TaskType): EvidenceClaim {
   return type === 'MED_STOP' ? 'STOPPED' : 'DONE';
 }
 
-function isConfident(e: Evidence): boolean {
-  return e.confidence >= VERIFY_THRESHOLD;
+/** A specific task outcome must satisfy its source, event and confidence policy. */
+export function canVerify(task: CareTask, e: Evidence): boolean {
+  if (e.patientId !== task.patientId || e.taskId !== task.id || e.claim !== verifyingClaim(task.type) ||
+      !Number.isFinite(e.confidence) || e.confidence > 1 || isUncertainEvidence(e)) return false;
+  if (isMedicationTask(task)) return medicationSourceEligible(e) && (!e.drugId || e.drugId === task.refId);
+  return FEED_SOURCE_FOR[task.type] ? isEligibleFeed(task, e) : directReport(e);
 }
 
-/**
- * Can this evidence verify the task?
- * System feeds, clinicians and human-confirmed evidence are trusted at face value;
- * patient/family reports need confidence ≥ VERIFY_THRESHOLD. Whatever the source,
- * evidence below the threshold NEVER verifies (safety invariant). A human
- * confirmation is recorded with confidence 1.
- */
-export function canVerify(task: CareTask, e: Evidence): boolean {
-  if (e.taskId !== task.id || e.claim !== verifyingClaim(task.type)) return false;
-  return isConfident(e);
+function priorityFactors(type: GapType, risk: Risk, daysOverdue: number): NonNullable<Gap['priorityFactors']> {
+  return { severity: SEVERITY[type], riskMultiplier: RISK_MULTIPLIER[risk], daysOverdue: Math.max(0, daysOverdue), uncertaintyBonus: type === 'LOW_CONFIDENCE' ? 1 : 0 };
 }
 
 export function computePriority(type: GapType, risk: Risk, daysOverdue: number): number {
-  const raw = SEVERITY[type] * RISK_MULTIPLIER[risk] * (1 + 0.25 * Math.max(0, daysOverdue)) + (type === 'LOW_CONFIDENCE' ? 1 : 0);
+  const factors = priorityFactors(type, risk, daysOverdue);
+  const raw = factors.severity * factors.riskMultiplier * (1 + 0.25 * factors.daysOverdue) + factors.uncertaintyBonus;
   return Math.round(raw * 10) / 10;
 }
 
@@ -107,17 +132,20 @@ export function gapId(patientId: string, type: GapType, key: string): string {
   return `${patientId}:${type}:${key}`;
 }
 
-/** Highest priority first; ties → detected earlier first; then id for stability. */
+/** Urgency first, then numerical priority, detection day and stable ID. */
 export function sortGaps(gaps: readonly Gap[]): Gap[] {
-  return [...gaps].sort((a, b) => b.priority - a.priority || a.detectedDay - b.detectedDay || a.id.localeCompare(b.id));
+  return [...gaps].sort((a, b) => ROUTE_ORDER[a.route] - ROUTE_ORDER[b.route] ||
+    b.priority - a.priority || a.detectedDay - b.detectedDay || a.id.localeCompare(b.id));
 }
 
 // ── Reason text (descriptive only) ───────────────────────────────────────────
 
 export function describeEvidence(e: Evidence): string {
   const said = e.rawText ? `«${e.rawText}»` : (e.detail ?? '');
-  const human = e.confirmedByHuman ? ', confirmed by a person' : '';
-  return `${SOURCE_LABEL[e.source]} Day ${e.day}: ${said ? `${said} → ` : ''}${e.claim} (confidence ${e.confidence.toFixed(2)}${human}).`;
+  const human = e.source === 'clinician' && e.confirmedByHuman ? ', confirmed by clinician' : '';
+  const when = e.recordedDay !== undefined && e.recordedDay !== e.day ? `Day ${e.day} (recorded Day ${e.recordedDay})` : `Day ${e.day}`;
+  const event = e.eventKind ? ` · ${e.eventKind.toLowerCase().replaceAll('_', ' ')}` : '';
+  return `${SOURCE_LABEL[e.source]} ${when}${event}: ${said ? `${said} → ` : ''}${e.claim} (confidence ${e.confidence.toFixed(2)}${human}).`;
 }
 
 function expectedMedText(med: PlanMedication, task: CareTask): string {
@@ -154,12 +182,14 @@ const RULE_TEXT: Record<GapType, string> = {
   STOPPED_STILL_TAKEN: 'Rule STOPPED_STILL_TAKEN: a medicine marked STOP in the plan is reported as still in use.',
   WRONG_DOSE: 'Rule WRONG_DOSE: the latest confident report says the pre-discharge dose is still in use.',
   DUPLICATE_THERAPY: 'Rule DUPLICATE_THERAPY: a medicine reported in use overlaps with an active plan medicine.',
-  UNLISTED_MED: 'Rule UNLISTED_MED: a medicine reported in use is not on the discharge list and has no overlap with plan medicines.',
-  LAB_MISSED: 'Rule LAB_MISSED: the due day has passed with no result from the lab system.',
-  FOLLOWUP_NOT_BOOKED: 'Rule FOLLOWUP_NOT_BOOKED: the booking deadline has passed with no booking from the appointment system.',
+  UNLISTED_MED: 'Rule UNLISTED_MED: the reported medicine has no identified match or overlap in the discharge list.',
+  LAB_MISSED: 'Rule LAB_MISSED: the due day has passed without an eligible laboratory result.',
+  FOLLOWUP_NOT_BOOKED: 'Rule FOLLOWUP_NOT_BOOKED: the booking deadline has passed without eligible booking confirmation.',
   FOLLOWUP_MISSED: 'Rule FOLLOWUP_MISSED: the appointment system reports the visit as not attended.',
-  NO_RESPONSE: 'Rule NO_RESPONSE: more than one day past the deadline with no answer and no feed data for this task.',
-  LOW_CONFIDENCE: `Rule LOW_CONFIDENCE: the latest answer was understood with confidence below ${VERIFY_THRESHOLD.toFixed(2)} and has not been confirmed by a person.`,
+  FOLLOWUP_ATTENDANCE_UNCONFIRMED: 'Rule FOLLOWUP_ATTENDANCE_UNCONFIRMED: the visit deadline has passed without an eligible attendance outcome.',
+  TASK_NOT_COMPLETED: 'Rule TASK_NOT_COMPLETED: an eligible report indicates the expected task was not completed.',
+  NO_RESPONSE: 'Rule NO_RESPONSE: the grace period has ended without an eligible task answer or observation.',
+  LOW_CONFIDENCE: `Rule LOW_CONFIDENCE: the interpretation is below ${VERIFY_THRESHOLD.toFixed(2)} or the reported fact or medicine identity is unresolved.`,
 };
 
 // ── Evaluation ───────────────────────────────────────────────────────────────
@@ -168,12 +198,42 @@ export interface Evaluation {
   taskStatus: Record<string, TaskStatus>;
   /** Open gaps only, sorted with sortGaps(). */
   gaps: Gap[];
+  followup: ReadonlyMap<string, FollowupEvidence>;
+  assessments: ReadonlyMap<string, EvidenceAssessment>;
+  medication: ReturnType<typeof reconcileMedications>;
+  /** Current rule conditions prior to administrative filtering. */
+  conditions: ReadonlyMap<string, Candidate>;
+  lifecycle: ReadonlyMap<string, GapLifecycle>;
 }
 
-interface Candidate {
+export interface FollowupEvidence {
+  observation?: Evidence;
+  supportedCompletion: boolean;
+}
+
+function assessNonMedication(task: CareTask, history: Evidence[]): EvidenceAssessment {
+  const validClaim = (e: Evidence) => e.claim === 'DONE' || e.claim === 'NOT_DONE';
+  const relevantClaim = (e: Evidence) => validClaim(e) || e.claim === 'UNSURE';
+  const direct = history.filter((e) => directReport(e) && relevantClaim(e));
+  if (!FEED_SOURCE_FOR[task.type]) return assessEvidence(history, direct, validClaim);
+  const feed = history.filter((e) => isEligibleFeed(task, e) && relevantClaim(e));
+  const assessment = assessEvidence(history, feed, validClaim);
+  const reports = history.filter((e) => direct.includes(e) || feed.includes(e));
+  const latest = reports.at(-1);
+  const uncertainty = latest && direct.includes(latest) &&
+    (isUncertainEvidence(latest) || (assessment.effective && latest.claim !== assessment.effective.claim))
+    ? latest : assessment.uncertainty;
+  return { ...assessment, observed: latest, uncertainty };
+}
+
+export interface Candidate {
   gap: Gap;
   /** Latest day of triggering evidence; a resolution must be on/after it to close the gap. */
   lastEvidenceDay: Day;
+}
+
+function relevantRecords(...records: (Evidence | undefined)[]): Evidence[] {
+  return [...new Map(records.filter((e): e is Evidence => !!e).map((e) => [e.id, e])).values()];
 }
 
 export function evaluate(
@@ -182,13 +242,11 @@ export function evaluate(
   evidence: readonly Evidence[],
   resolutions: readonly GapResolution[],
   today: Day,
+  audit: readonly AuditEntry[] = [],
 ): Evaluation {
   // Only what is known by `today` counts (the simulated clock can move backwards).
-  const known = evidence
-    .map((e, index) => ({ e, index }))
-    .filter(({ e }) => e.patientId === patient.id && e.day <= today)
-    .sort((a, b) => a.e.day - b.e.day || a.index - b.index)
-    .map(({ e }) => e);
+  const medication = reconcileMedications(patient, tasks, evidence, today);
+  const known = medication.known;
 
   const byTask = new Map<string, Evidence[]>();
   for (const e of known) {
@@ -203,15 +261,17 @@ export function evaluate(
     type: GapType,
     key: string,
     risk: Risk,
-    fields: { taskId?: string; drugId?: string; reasons: string[]; evidence: Evidence[]; detectedDay: Day; daysOverdue: number },
+    fields: { taskId?: string; drugId?: string; reasons: string[]; evidence: Evidence[]; triggers?: Evidence[]; detectedDay: Day; daysOverdue: number },
   ) => {
     const id = gapId(patient.id, type, key);
-    const lastEvidenceDay = Math.max(fields.detectedDay, ...fields.evidence.map((e) => e.day));
+    const triggers = fields.triggers ?? fields.evidence;
+    const lastEvidenceDay = Math.max(fields.detectedDay, ...triggers.map((e) => e.recordedDay ?? e.day));
     const existing = candidates.get(id);
-    if (existing) {
-      // Same gap seen again (e.g. repeated report): merge evidence, keep first detection.
-      for (const e of fields.evidence) if (!existing.gap.evidenceIds.includes(e.id)) existing.gap.evidenceIds.push(e.id);
-      existing.lastEvidenceDay = Math.max(existing.lastEvidenceDay, lastEvidenceDay);
+    const evidenceIds = [...new Set([...fields.evidence.map((e) => e.id), ...(existing?.gap.evidenceIds ?? [])])];
+    const triggerEvidenceIds = [...new Set([...triggers.map((e) => e.id), ...(existing?.gap.triggerEvidenceIds ?? [])])];
+    if (existing && existing.lastEvidenceDay > lastEvidenceDay) {
+      existing.gap.evidenceIds = evidenceIds;
+      existing.gap.triggerEvidenceIds = triggerEvidenceIds;
       return;
     }
     candidates.set(id, {
@@ -224,206 +284,161 @@ export function evaluate(
         type,
         risk,
         priority: computePriority(type, risk, fields.daysOverdue),
+        priorityFactors: priorityFactors(type, risk, fields.daysOverdue),
         reasons: [...fields.reasons, RULE_TEXT[type]],
-        evidenceIds: fields.evidence.map((e) => e.id),
-        detectedDay: fields.detectedDay,
+        evidenceIds,
+        triggerEvidenceIds,
+        detectedDay: Math.min(fields.detectedDay, existing?.gap.detectedDay ?? fields.detectedDay),
         route: routeFor(type, risk),
       },
     });
   };
 
-  const verified = new Set<string>();
+
+  const assessments = new Map<string, EvidenceAssessment>();
+  const followup = new Map<string, FollowupEvidence>();
 
   for (const task of tasks) {
-    const ev = byTask.get(task.id) ?? [];
-    if (ev.some((e) => canVerify(task, e))) verified.add(task.id);
+    const assessment = medication.byTask.get(task.id) ?? assessNonMedication(task, byTask.get(task.id) ?? []);
+    const { effective, uncertainty, observed, contradiction, history } = assessment;
+    const supportedCompletion = !uncertainty && !!effective && canVerify(task, effective);
+    assessments.set(task.id, assessment);
+    followup.set(task.id, { observation: uncertainty ?? effective ?? observed, supportedCompletion });
 
     const past = today > task.deadlineDay;
     const overdue = Math.max(0, today - task.deadlineDay);
-    const latest = ev.at(-1);
-    const latestConfident = (claims: EvidenceClaim[]) =>
-      [...ev].reverse().find((e) => isConfident(e) && claims.includes(e.claim));
-    const base = { taskId: task.id };
     const expected = expectedText(patient, task);
+    const base = { taskId: task.id, daysOverdue: overdue };
+    const reportGap = (type: GapType, day: Day, driver: Evidence, explanation?: string, context: Evidence[] = []) => {
+      const records = relevantRecords(driver, ...context);
+      push(type, task.id, task.risk, {
+        ...base,
+        reasons: [expected, ...(explanation ? [explanation] : []), ...records.map(describeEvidence)],
+        evidence: records, triggers: [driver], detectedDay: Math.max(day, driver.day, driver.recordedDay ?? driver.day),
+      });
+    };
 
-    switch (task.type) {
-      case 'MED_START': {
-        const e = latestConfident(['DONE', 'NOT_DONE']);
-        if (past && e?.claim === 'NOT_DONE') {
-          push('NOT_STARTED', task.id, task.risk, {
-            ...base,
-            reasons: [expected, describeEvidence(e)],
-            evidence: [e],
-            detectedDay: Math.max(task.deadlineDay + 1, e.day),
-            daysOverdue: overdue,
-          });
-        }
-        break;
+    if (effective) {
+      const context = relevantRecords(contradiction, uncertainty);
+      if (task.type === 'MED_START' && past && effective.claim === 'NOT_DONE') {
+        reportGap('NOT_STARTED', task.deadlineDay + 1, effective, undefined, context);
+      } else if (task.type === 'MED_STOP' && (effective.claim === 'STILL_TAKING' || effective.claim === 'TAKING_UNLISTED')) {
+        reportGap('STOPPED_STILL_TAKEN', effective.day, effective, undefined, context);
+      } else if (task.type === 'MED_DOSE_CHANGE' && effective.claim === 'OLD_DOSE') {
+        reportGap('WRONG_DOSE', effective.day, effective, undefined, context);
+      } else if (effective.claim === 'NOT_DONE' &&
+          (task.type === 'MED_DOSE_CHANGE' || ((task.type === 'MED_CONTINUE' || task.type === 'WOUND_CHECK') && today >= task.deadlineDay))) {
+        const explanation = task.type === 'MED_DOSE_CHANGE' ? 'Use of the new dose was denied. The actual dose is unspecified.'
+          : task.type === 'MED_CONTINUE' ? 'The current continuation check has a negative report.'
+            : 'The patient-side check or clinician report indicates the wound check was not completed.';
+        reportGap('TASK_NOT_COMPLETED', task.type === 'MED_DOSE_CHANGE' ? effective.day : task.deadlineDay, effective, explanation, context);
       }
-      case 'MED_STOP': {
-        // Any time: a STOP medicine reported as still in use.
-        const e = latestConfident(['STILL_TAKING', 'STOPPED']);
-        if (e?.claim === 'STILL_TAKING') {
-          push('STOPPED_STILL_TAKEN', task.id, task.risk, {
-            ...base,
-            reasons: [expected, describeEvidence(e)],
-            evidence: [e],
-            detectedDay: e.day,
-            daysOverdue: overdue,
-          });
-        }
-        break;
-      }
-      case 'MED_DOSE_CHANGE': {
-        const e = latestConfident(['OLD_DOSE', 'DONE']);
-        if (e?.claim === 'OLD_DOSE') {
-          push('WRONG_DOSE', task.id, task.risk, {
-            ...base,
-            reasons: [expected, describeEvidence(e)],
-            evidence: [e],
-            detectedDay: e.day,
-            daysOverdue: overdue,
-          });
-        }
-        break;
-      }
-      case 'LAB_DONE': {
-        if (past && !ev.some((e) => e.source === 'lab_system' && e.claim === 'DONE')) {
-          const patientReports = ev.filter((e) => isPatientSideSource(e.source));
-          push('LAB_MISSED', task.id, task.risk, {
-            ...base,
-            reasons: [expected, `No result from the lab system as of Day ${today}.`, ...patientReports.map(describeEvidence)],
-            evidence: patientReports,
-            detectedDay: task.deadlineDay + 1,
-            daysOverdue: overdue,
-          });
-        }
-        break;
-      }
-      case 'FOLLOWUP_BOOKED': {
-        if (past && !ev.some((e) => e.source === 'appointment_system' && e.claim === 'DONE')) {
-          push('FOLLOWUP_NOT_BOOKED', task.id, task.risk, {
-            ...base,
-            reasons: [expected, `No booking from the appointment system as of Day ${today}.`],
-            evidence: [],
-            detectedDay: task.deadlineDay + 1,
-            daysOverdue: overdue,
-          });
-        }
-        break;
-      }
-      case 'FOLLOWUP_ATTENDED': {
-        const appt = [...ev].reverse().find((e) => e.source === 'appointment_system');
-        if (past && appt?.claim === 'NOT_DONE') {
-          push('FOLLOWUP_MISSED', task.id, task.risk, {
-            ...base,
-            reasons: [expected, describeEvidence(appt)],
-            evidence: [appt],
-            detectedDay: Math.max(task.deadlineDay + 1, appt.day),
-            daysOverdue: overdue,
-          });
-        }
-        break;
-      }
-      default:
-        break;
     }
 
-    // NO_RESPONSE: patient-side task, >1 day overdue, nothing at all. Feed-verifiable
-    // tasks are excluded — they have their own feed rules (LAB_MISSED, FOLLOWUP_*).
-    if (PATIENT_OWNERS.has(task.owner) && !FEED_SOURCE_FOR[task.type] && today > task.deadlineDay + 1 && ev.length === 0) {
+    const feed = FEED_SOURCE_FOR[task.type];
+    if (feed && past && effective?.claim !== 'DONE') {
+      const supporting = history.filter((e) => e.source === feed || isPatientSideSource(e.source) || e.source === 'clinician');
+      if (task.type === 'FOLLOWUP_ATTENDED' && effective?.claim === 'NOT_DONE') {
+        reportGap('FOLLOWUP_MISSED', task.deadlineDay + 1, effective, undefined, supporting);
+      } else {
+        const type = task.type === 'LAB_DONE' ? 'LAB_MISSED'
+          : task.type === 'FOLLOWUP_BOOKED' ? 'FOLLOWUP_NOT_BOOKED' : 'FOLLOWUP_ATTENDANCE_UNCONFIRMED';
+        const subject = task.type === 'LAB_DONE' ? 'laboratory result' : task.type === 'FOLLOWUP_BOOKED' ? 'booking confirmation' : 'attendance outcome';
+        const recorded = supporting.some((e) => e.source === feed);
+        const missing = recorded ? 'The available system records do not establish the required outcome.' : 'No matching system record is available.';
+        const feedObservation = observed?.source === feed ? observed : undefined;
+        const triggers = relevantRecords(effective, feedObservation);
+        push(type, task.id, task.risk, {
+          ...base,
+          reasons: [expected, 'No eligible ' + subject + ' as of Day ' + today + '. ' + missing, ...supporting.map(describeEvidence)],
+          evidence: supporting, triggers, detectedDay: Math.max(task.deadlineDay + 1, effective?.recordedDay ?? effective?.day ?? 0),
+        });
+      }
+    }
+
+    const end = task.type === 'MED_CONTINUE' ? patient.plan.meds.find((med) => med.drugId === task.refId)?.treatmentEndDay : undefined;
+    if (!feed && PATIENT_OWNERS.has(task.owner) && !observed &&
+        today >= task.deadlineDay + NO_RESPONSE_GRACE_DAYS && (end === undefined || today <= end)) {
+      const context = relevantRecords(history.at(-1));
       push('NO_RESPONSE', task.id, task.risk, {
-        ...base,
-        reasons: [expected, `No check-in answer and no feed data for this task as of Day ${today}.`],
-        evidence: [],
-        detectedDay: task.deadlineDay + 2,
-        daysOverdue: overdue,
+        ...base, reasons: [expected, 'No eligible check-in answer or observation is available as of Day ' + today + '.', ...context.map(describeEvidence)],
+        evidence: context, triggers: [], detectedDay: task.deadlineDay + NO_RESPONSE_GRACE_DAYS,
       });
     }
 
-    // LOW_CONFIDENCE (any time): latest answer is uncertain and nothing else verified the task.
-    if (
-      latest &&
-      isPatientSideSource(latest.source) &&
-      latest.confidence < VERIFY_THRESHOLD &&
-      !latest.confirmedByHuman &&
-      !verified.has(task.id)
-    ) {
-      push('LOW_CONFIDENCE', task.id, task.risk, {
-        ...base,
-        reasons: [expected, describeEvidence(latest)],
-        evidence: [latest],
-        detectedDay: latest.day,
-        daysOverdue: overdue,
-      });
+    // Missing or negative system outcomes already have their own open rule.
+    // A newer unresolved report can still qualify a supported system outcome.
+    if (uncertainty && uncertainty.taskId === task.id && (!feed || effective?.claim === 'DONE' || !past)) {
+      reportGap('LOW_CONFIDENCE', uncertainty.day, uncertainty,
+        effective ? 'The effective report remains on record. The newer report needs clarification.' : undefined,
+        relevantRecords(effective, contradiction));
     }
   }
 
   // Medication-level rules from TAKING_UNLISTED reports (any time).
-  const activePlanMeds = patient.plan.meds.filter((m) => m.action !== 'STOP');
-  for (const e of known) {
-    if (e.claim !== 'TAKING_UNLISTED') continue;
+  for (const [key, reports] of medication.openReviews) {
+    const high = reports.some((e) =>
+      [e.drugId, ...(e.candidateDrugIds ?? [])].some((id) => id && getDrug(id)?.highAlert) ||
+      tasks.some((t) => t.type === 'MED_STOP' && t.refId === e.drugId && t.risk === 'high'));
+    push('LOW_CONFIDENCE', key, high ? 'high' : 'medium', {
+      reasons: ['An open medicines answer has an uncertain claim or unresolved identity.', ...reports.map(describeEvidence)],
+      evidence: reports,
+      detectedDay: Math.min(...reports.map((e) => e.recordedDay ?? e.day)),
+      daysOverdue: 0,
+    });
+  }
+  const activePlanMeds = patient.plan.meds.filter((m) => m.action !== 'STOP' && (m.treatmentEndDay === undefined || today <= m.treatmentEndDay));
+  for (const assessment of medication.open.values()) {
+    const e = assessment.effective;
+    if (e?.claim !== 'TAKING_UNLISTED') continue;
     const daysOverdue = Math.max(0, today - e.day);
     const drug = e.drugId ? getDrug(e.drugId) : undefined;
     const unlistedName = drug?.generic ?? e.detail ?? 'An unidentified medicine';
-    const reported = `Reported in use but not on the discharge list: ${unlistedName}.`;
+    const reported = drug ? `Reported in use but not on the discharge list: ${unlistedName}.` : 'A medicine was reported in use, but its identity is unknown.';
 
     // The reported drug IS an active plan medicine → not unlisted, no gap.
-    if (e.drugId && activePlanMeds.some((m) => m.drugId === e.drugId)) continue;
+    if (e.drugId && patient.plan.meds.some((m) => m.drugId === e.drugId)) continue;
 
-    // The reported drug is a plan medicine marked STOP → same gap as the STOP task.
-    const stopMed = e.drugId ? patient.plan.meds.find((m) => m.action === 'STOP' && m.drugId === e.drugId) : undefined;
-    const stopTask = stopMed ? tasks.find((t) => t.type === 'MED_STOP' && t.refId === stopMed.drugId) : undefined;
-    if (stopTask) {
-      push('STOPPED_STILL_TAKEN', stopTask.id, stopTask.risk, {
-        taskId: stopTask.id,
-        reasons: [expectedText(patient, stopTask), describeEvidence(e)],
-        evidence: [e],
-        detectedDay: e.day,
-        daysOverdue,
-      });
-      continue;
-    }
-
-    const dup = e.drugId
+    const duplicates = e.drugId
       ? activePlanMeds
           .map((m) => ({ med: m, match: findDuplicates(m.drugId, e.drugId as string) }))
-          .find((x): x is { med: PlanMedication; match: DuplicateMatch } => x.match !== null)
-      : undefined;
+          .filter((x): x is { med: PlanMedication; match: DuplicateMatch } => x.match !== null)
+      : [];
+    const reports = relevantRecords(e, assessment.contradiction, assessment.uncertainty);
+    const openFields = {
+      evidence: reports, triggers: [e], detectedDay: e.recordedDay ?? e.day, daysOverdue,
+    };
 
-    if (dup && drug) {
-      const planDrug = requireDrug(dup.med.drugId);
-      push('DUPLICATE_THERAPY', drug.id, drug.highAlert || planDrug.highAlert ? 'high' : 'medium', {
+    if (duplicates.length && drug) {
+      const high = drug.highAlert || duplicates.some(({ med }) => requireDrug(med.drugId).highAlert);
+      push('DUPLICATE_THERAPY', drug.id, high ? 'high' : 'medium', {
+        ...openFields,
         drugId: drug.id,
-        reasons: [reported, describeEvidence(e), duplicateText(dup.match, drug.generic, planDrug.generic)],
-        evidence: [e],
-        detectedDay: e.day,
-        daysOverdue,
+        reasons: [reported, ...reports.map(describeEvidence),
+          ...duplicates.map(({ med, match }) => duplicateText(match, drug.generic, requireDrug(med.drugId).generic)),
+          'The plan lists possible overlap. Concurrent use remains unconfirmed.'],
       });
     } else {
-      push('UNLISTED_MED', drug?.id ?? e.id, drug?.highAlert ? 'high' : 'medium', {
+      push('UNLISTED_MED', openMedicationKey(e), drug?.highAlert ? 'high' : 'medium', {
+        ...openFields,
         ...(drug ? { drugId: drug.id } : {}),
-        reasons: [reported, describeEvidence(e)],
-        evidence: [e],
-        detectedDay: e.day,
-        daysOverdue,
+        reasons: [reported, ...reports.map(describeEvidence)],
       });
     }
   }
 
-  // Resolutions: RESOLVED on/after the latest triggering evidence closes the gap.
-  // New evidence after a resolution re-opens it (nothing is silenced for good).
-  const resolvedOn = new Map<string, Day>();
-  for (const r of resolutions) {
-    if (r.action !== 'RESOLVED' || r.day > today) continue;
-    resolvedOn.set(r.gapId, Math.max(resolvedOn.get(r.gapId) ?? -Infinity, r.day));
-  }
-
+  const decisions = effectiveDecisions(resolutions, today);
+  const observations = gapObservations(audit, today + (patient.dischargeDay ?? 0));
+  const evidenceById = new Map(known.map((e) => [e.id, e]));
+  const lifecycle = new Map<string, GapLifecycle>();
   const open: Gap[] = [];
   const closedTasks = new Set<string>();
   for (const { gap, lastEvidenceDay } of candidates.values()) {
-    const resolvedDay = resolvedOn.get(gap.id);
-    if (resolvedDay !== undefined && resolvedDay >= lastEvidenceDay) {
+    const observed = observations.get(gap.id);
+    const state = lifecycleFor(gap, lastEvidenceDay, evidenceById, decisions,
+      observed?.action === 'GAP_CONDITION_CLEARED' ? undefined : observed, audit);
+    lifecycle.set(gap.id, state);
+    if (state.disposition) {
       if (gap.taskId) closedTasks.add(gap.taskId);
     } else {
       open.push(gap);
@@ -439,10 +454,10 @@ export function evaluate(
         ? 'GAP'
         : closedTasks.has(task.id)
           ? 'CLOSED'
-          : verified.has(task.id)
+          : followup.get(task.id)?.supportedCompletion
             ? 'VERIFIED'
             : 'PENDING';
   }
 
-  return { taskStatus, gaps: sortGaps(open) };
+  return { taskStatus, gaps: sortGaps(open), followup, assessments, medication, conditions: candidates, lifecycle };
 }

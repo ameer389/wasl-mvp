@@ -7,6 +7,8 @@ import { Badge, Button, Card, Field, IconButton, inputClasses, selectClasses, te
 import { buildCareGraph } from '../../domain/careGraph';
 import { getDrug } from '../../domain/drugs';
 import { LANES, laneOf } from '../../domain/graphLayout';
+import { isValidPatient } from '../../domain/planIntegrity';
+import { MAX_DISCHARGE_DAY } from '../../domain/time';
 import { shortTaskLabel } from '../../domain/labels';
 import {
   emptyFollowUp,
@@ -62,10 +64,16 @@ export default function NewDischarge() {
   }, [form]);
 
   const set = <K extends keyof PlanForm>(key: K, value: PlanForm[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const clearRemovedLabLinks = (next: PlanForm, key: 'meds' | 'labs' | 'followUps'): PlanForm => {
+    if (key !== 'meds') return next;
+    return { ...next, labs: next.labs.map((lab) =>
+      lab.linkedDrugId && !next.meds.some((med) => med.drugId === lab.linkedDrugId) ? { ...lab, linkedDrugId: '' } : lab
+    ) };
+  };
   const setRow = <K extends 'meds' | 'labs' | 'followUps'>(key: K, index: number, patch: Partial<PlanForm[K][number]>) =>
-    setForm((f) => ({ ...f, [key]: f[key].map((r, i) => (i === index ? { ...r, ...patch } : r)) }));
+    setForm((f) => clearRemovedLabLinks({ ...f, [key]: f[key].map((r, i) => (i === index ? { ...r, ...patch } : r)) }, key));
   const removeRow = (key: 'meds' | 'labs' | 'followUps', index: number) =>
-    setForm((f) => ({ ...f, [key]: f[key].filter((_, i) => i !== index) }));
+    setForm((f) => clearRemovedLabLinks({ ...f, [key]: f[key].filter((_, i) => i !== index) }, key));
 
   const save = () => {
     setSubmitted(true);
@@ -77,6 +85,10 @@ export default function NewDischarge() {
     const id = nextPatientId(store.state.patients);
     // The patient's Day 0 is today's simulated day; their timeline starts now.
     const patient = formToPatient(form, id, store.state.simulatedDay);
+    if (!isValidPatient(patient)) {
+      toast.show({ message: store.state.simulatedDay > MAX_DISCHARGE_DAY ? 'Choose an earlier simulated day to save this discharge.' : 'Check the discharge plan before saving.' });
+      return;
+    }
     store.addPatient(patient);
     toast.show({
       message: `${patient.nameEn} added — ${buildCareGraph(patient).length} tasks created.`,
@@ -117,6 +129,11 @@ export default function NewDischarge() {
           <input value={m.previousDose} onChange={(e) => setRow('meds', i, { previousDose: e.target.value })} className={inputClasses} />
         </Field>
       )}
+      {(m.action === 'NEW' || m.action === 'CONTINUE') && (
+        <Field label="Last treatment day (optional)" hint="From discharge, including this day." error={err(`meds.${i}.treatmentEndDay`)} className="col-span-12 md:col-span-4">
+          <input inputMode="numeric" value={m.treatmentEndDay ?? ''} onChange={(e) => setRow('meds', i, { treatmentEndDay: e.target.value })} className={inputClasses} />
+        </Field>
+      )}
       {getDrug(m.drugId)?.highAlert && (
         <p className="col-span-12 flex items-center gap-2 text-xs text-muted">
           <Badge variant="high">High-alert</Badge> Tasks for this medicine are high risk and route to a clinician immediately when they fail.
@@ -133,7 +150,7 @@ export default function NewDischarge() {
       <Field label="Due day" error={err(`labs.${i}.dueDay`)} className="col-span-4 md:col-span-2">
         <input inputMode="numeric" value={l.dueDay} onChange={(e) => setRow('labs', i, { dueDay: e.target.value })} className={inputClasses} />
       </Field>
-      <Field label="Linked medicine (optional)" className="col-span-8 md:col-span-4">
+      <Field label="Linked medicine (optional)" error={err(`labs.${i}.linkedDrugId`)} className="col-span-8 md:col-span-4">
         <select value={l.linkedDrugId} onChange={(e) => setRow('labs', i, { linkedDrugId: e.target.value })} className={selectClasses}>
           <option value="">None</option>
           {form.meds

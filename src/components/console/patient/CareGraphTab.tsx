@@ -1,5 +1,6 @@
 import { AlertTriangle, CalendarPlus, Check, CheckCircle2, Circle, FlaskConical, Bandage, Play, Repeat, SlidersHorizontal, Square, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { dependencyKind } from '../../../domain/careGraph';
 import { GAP_TYPE_LABEL, OWNER_LABEL, TASK_TYPE_LABEL, entityLabel, shortTaskLabel } from '../../../domain/labels';
 import { DEFAULT_GRAPH_METRICS, fitGraphMetrics, layoutCareGraph } from '../../../domain/graphLayout';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
@@ -25,7 +26,7 @@ function nodeClasses(status: TaskStatus, risk: Risk): string {
 }
 
 function StatusGlyph({ status }: { status: TaskStatus }) {
-  if (status === 'VERIFIED' || status === 'CLOSED') return <Check size={12} aria-hidden="true" className="shrink-0" />;
+  if (status === 'VERIFIED') return <Check size={12} aria-hidden="true" className="shrink-0" />;
   if (status === 'GAP' || status === 'ESCALATED') return <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />;
   return <Circle size={10} aria-hidden="true" className="shrink-0" />;
 }
@@ -52,7 +53,7 @@ const LEGEND: { label: string; className: string; status: TaskStatus }[] = [
   { label: 'Gap · high risk', className: nodeClasses('ESCALATED', 'high'), status: 'ESCALATED' },
   { label: 'Gap · medium / low', className: nodeClasses('GAP', 'medium'), status: 'GAP' },
   { label: 'Pending', className: nodeClasses('PENDING', 'low'), status: 'PENDING' },
-  { label: 'Closed', className: nodeClasses('CLOSED', 'low'), status: 'CLOSED' },
+  { label: 'Gap closed', className: nodeClasses('CLOSED', 'low'), status: 'CLOSED' },
 ];
 
 export function CareGraphTab({ view }: { view: PatientView }) {
@@ -73,6 +74,8 @@ export function CareGraphTab({ view }: { view: PatientView }) {
   const layout = useMemo(() => layoutCareGraph(tasks, m), [tasks, m]);
   const compact = m.dayWidth < 96;
   const [openTask, setOpenTask] = useState<CareTask | undefined>();
+  const assessment = openTask ? view.assessments.get(openTask.id) : undefined;
+  const taskEvidence = openTask ? assessment?.history ?? evidence.filter((e) => e.taskId === openTask.id) : [];
   const todayX = today >= 0 && today <= layout.lastDay ? layout.dayCenter(today) : undefined;
   const days = Array.from({ length: layout.lastDay + 1 }, (_, d) => d);
 
@@ -88,19 +91,19 @@ export function CareGraphTab({ view }: { view: PatientView }) {
           value={fit ? 'fit' : 'scroll'}
           onChange={setFitChoice}
           options={[
-            { value: 'fit', label: 'Fit 14 days' },
+            { value: 'fit', label: `Fit ${layout.lastDay} days` },
             { value: 'scroll', label: 'Scroll' },
           ]}
         />
-        <span className="text-xs text-faint">{fit ? 'Day 0–14 at a glance; hover a task for its full name.' : 'Wider columns; scroll sideways inside the graph.'}</span>
+        <span className="text-xs text-faint">{fit ? `Day 0–${layout.lastDay}; hover a task for its full name.` : 'Wider columns; scroll sideways inside the graph.'}</span>
       </div>
       <Card padding="none" className="overflow-hidden" data-tour="care-graph">
         <div
           ref={boxRef}
-          className={fit ? 'overflow-hidden' : 'overflow-x-auto'}
+          className="overflow-x-auto"
           tabIndex={0}
           role="region"
-          aria-label={fit ? 'Care graph timeline, Day 0 to 14' : 'Care graph timeline, Day 0 to 14 (scrolls sideways)'}
+          aria-label={`Care graph timeline, Day 0 to ${layout.lastDay}`}
         >
           <div className="relative" style={{ width: layout.width, height: layout.height + 8 }}>
             {/* lanes */}
@@ -179,7 +182,7 @@ export function CareGraphTab({ view }: { view: PatientView }) {
                       style={{ width: n.width, height: n.height }}
                     >
                       {compact ? <ActionGlyph type={n.task.type} size={11} /> : <StatusGlyph status={status} />}
-                      <span className={cn('max-w-full truncate', compact && 'pb-px', status === 'CLOSED' && 'line-through decoration-faint')}>
+                      <span className={cn('max-w-full truncate', compact && 'pb-px')}>
                         {compact ? entityLabel(n.task, patient) : shortTaskLabel(n.task, patient)}
                       </span>
                     </button>
@@ -204,7 +207,7 @@ export function CareGraphTab({ view }: { view: PatientView }) {
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" className="h-px w-5 bg-line-strong" />
-          Depends on
+          Related task
         </span>
         <span className="ms-auto text-faint">Click a task for details and evidence.</span>
       </div>
@@ -242,17 +245,22 @@ export function CareGraphTab({ view }: { view: PatientView }) {
               </dd>
               <dt className="text-muted">Status</dt>
               <dd>
-                <StatusBadge status={statuses[openTask.id] ?? 'PENDING'} risk={openTask.risk} />
+                {assessment && statuses[openTask.id] === 'CLOSED'
+                  ? <span className="text-muted">Gap closed</span>
+                  : <StatusBadge status={statuses[openTask.id] ?? 'PENDING'} risk={openTask.risk} />}
               </dd>
               {openTask.dependsOn.length > 0 && (
                 <>
-                  <dt className="text-muted">Depends on</dt>
+                  <dt className="text-muted">Related tasks</dt>
                   <dd className="flex flex-col gap-0.5">
-                    {openTask.dependsOn.map((id) => (
-                      <span key={id} className="text-ink-2">
-                        {tasks.find((t) => t.id === id)?.label ?? id}
-                      </span>
-                    ))}
+                    {openTask.dependsOn.map((id) => {
+                      const predecessor = tasks.find((t) => t.id === id);
+                      return predecessor && (
+                        <span key={id} className="text-ink-2">
+                          {predecessor.label} · {dependencyKind(predecessor, openTask) === 'question_priority' ? 'Question order' : 'Context'}
+                        </span>
+                      );
+                    })}
                   </dd>
                 </>
               )}
@@ -276,16 +284,16 @@ export function CareGraphTab({ view }: { view: PatientView }) {
 
             <div>
               <h3 className="mb-2 text-xs font-medium text-muted">Evidence (provenance)</h3>
-              {evidence.filter((e) => e.taskId === openTask.id).length === 0 ? (
+              {assessment?.uncertainty && <p className="mb-2 text-xs text-medium">Unresolved report</p>}
+              {taskEvidence.length === 0 ? (
                 <p className="text-muted">No evidence for this task yet.</p>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {evidence
-                    .filter((e) => e.taskId === openTask.id)
+                  {taskEvidence
                     .slice()
                     .reverse()
                     .map((e) => (
-                      <EvidenceItem key={e.id} evidence={e} />
+                      <EvidenceItem key={e.id} evidence={e} effective={e === assessment?.effective} />
                     ))}
                 </ul>
               )}

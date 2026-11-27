@@ -5,7 +5,7 @@ import { Badge, Card, StatCard } from '../../components/ui';
 import { GAP_TYPE_LABEL } from '../../domain/labels';
 import type { GapType } from '../../domain/types';
 
-const { summary, gapDetection, parser, questions, safety, external, notTested, disclaimer } = results;
+const { summary, gapDetection, focusedGapDetection, parser, questions, safety, external, notTested, disclaimer } = results;
 
 function Section({ id, title, method, limitations, children }: { id: string; title: string; method: string; limitations: string; children: ReactNode }) {
   return (
@@ -62,7 +62,7 @@ function Table({ caption, head, rows }: { caption: string; head: string[]; rows:
 }
 
 export default function Validation() {
-  const types = Object.keys(gapDetection.perType) as GapType[];
+  const rules = Object.entries(gapDetection.perType).filter(([, rule]) => rule.expected > 0);
   const externalDone = external.status === 'done';
 
   return (
@@ -86,9 +86,9 @@ export default function Validation() {
           simulated
         />
         <StatCard
-          label="Parser accuracy"
+          label="Phase 04B label agreement"
           value={`${summary.parserTestAccuracyPct}%`}
-          hint={`Held-out test split. ${summary.parserSafeFailures} of ${summary.parserWrong} errors were low-confidence (safe); ${summary.parserUnsafe} unsafe`}
+          hint={`Frozen written labels · ${summary.parserSafeFailures} disagreements below 70%; ${summary.parserUnsafe} at or above`}
           simulated
         />
         <StatCard
@@ -110,7 +110,7 @@ export default function Validation() {
           caption="Gap detection per gap type"
           head={['Gap type', 'Injected', 'Detected', 'Recall']}
           rows={[
-            ...types.map((t) => [GAP_TYPE_LABEL[t], gapDetection.perType[t].expected, gapDetection.perType[t].detected, `${gapDetection.perType[t].recallPct}%`]),
+            ...rules.map(([type, rule]) => [GAP_TYPE_LABEL[type as GapType], rule.expected, rule.detected, `${rule.recallPct}%`]),
             ['All gap types', gapDetection.expectedGaps, gapDetection.truePositives, `${gapDetection.recallPct}%`],
           ]}
         />
@@ -119,32 +119,40 @@ export default function Validation() {
           controls raised a gap over {gapDetection.controlDaysChecked} patient-days · {gapDetection.highRiskRoutedNow} of {gapDetection.highRiskGaps} high-risk gaps routed to a
           clinician now ({gapDetection.highRiskRoutedNowPct}%).
         </p>
+        <p className="text-sm text-ink-2 tabular-nums">
+          Focused Phase 06 cases · {focusedGapDetection.truePositives} of {focusedGapDetection.expectedGaps} expected gaps · {focusedGapDetection.falsePositives} unexpected gaps.
+        </p>
       </Section>
 
       <Section
         id="v-parser"
         title="2 · Understanding Saudi-dialect answers"
-        method={`${parser.counts.total} hand-written answers (${parser.counts.dev} to tune on, ${parser.counts.test} held out). The parser was tuned on the first group only; the held-out group was scored once after the parser was frozen.`}
-        limitations="The same team wrote the answers and the parser, so real-world accuracy will be lower. Answers are typed, not recorded speech, and the set is small."
+        method={parser.method}
+        limitations="A small, team-authored text benchmark. Live transcription and independent interpretation accuracy remain unmeasured."
       >
         <Table
-          caption="Parser results per intent on the held-out test split"
+          caption="Phase 04B results per intent on the frozen test split"
           head={['What the speaker meant', 'Precision', 'Recall', 'F1', 'Test items']}
           rows={Object.entries(parser.perIntent).map(([k, m]) => [k.replace(/_/g, ' ').toLowerCase(), m.precision ?? '—', m.recall ?? '—', m.f1 ?? '—', m.support])}
         />
         <p className="text-sm text-ink-2 tabular-nums">
-          Test accuracy {parser.testAccuracyPct}% ({parser.testCorrect} of {parser.testN}) · hard items {parser.hardAccuracyPct}% · {parser.wrong} wrong, {parser.safeFailures} of
-          them low-confidence and therefore sent to a person, {parser.unsafe} unsafe · medicine names matched exactly in {parser.medExtractionExactPct}% of {parser.medExtractionN}{' '}
-          items.
+          Phase 04B · Intent {parser.testAccuracyPct}% · difficult subset {parser.hardAccuracyPct}% · exact medicine extraction {parser.medExtractionExactPct}%.
+          {' '}{parser.safeFailures} of {parser.wrong} label disagreements below 70%, {parser.unsafe} at or above.
         </p>
+        <Table
+          caption="Historical evaluation on the same written split"
+          head={['Evaluation', 'Intent agreement', 'Difficult subset', 'Exact medicine extraction']}
+          rows={parser.history.map(({ phase, intent, difficult, medicine }) => [phase, intent, difficult, medicine])}
+        />
+        <p className="text-sm text-muted">The frozen dose labels equate a denial with use of the previous dose. The app records an unspecified mismatch when the answer only establishes that the new dose is not in use.</p>
         <ul className="flex flex-col gap-1 text-sm text-muted">
           {parser.wrongItems.map((w) => (
             <li key={w.id}>
-              Missed:{' '}
+              Label disagreement:{' '}
               <span dir="rtl" lang="ar" className="font-arabic text-ink-2">
                 «{w.text}»
               </span>{' '}
-              — meant “{w.expected.replace(/_/g, ' ').toLowerCase()}”, understood as “{w.got.toLowerCase()}” (confidence {Math.round(w.confidence * 100)}%, so a person checks it).
+              — frozen label “{w.expected.replace(/_/g, ' ').toLowerCase()}”, parser output “{w.got.toLowerCase()}” (interpretation confidence {Math.round(w.confidence * 100)}%).
             </li>
           ))}
         </ul>
@@ -153,13 +161,14 @@ export default function Validation() {
       <Section id="v-questions" title="3 · Fewer questions for the patient" method={questions.method} limitations={questions.assumption}>
         <Table
           caption="Adaptive versus full-script question counts"
-          head={['Script', 'Questions asked', 'Per patient per day']}
+          head={['Script', 'Questions planned', 'Per patient per day']}
           rows={[
             ['WASL adaptive check-in', questions.adaptiveQuestions, questions.adaptivePerPatientDay],
-            ['Full script, every day', questions.fullScriptQuestions, questions.fullScriptPerPatientDay],
-            ['Difference', `−${questions.reductionPct}%`, `≈ ${questions.minutesSavedPerPatientDay} min (assumption)`],
+            ['Hypothetical full daily script', questions.fullScriptQuestions, questions.fullScriptPerPatientDay],
+            ['Difference', `−${questions.reductionPct}%`, '—'],
           ]}
         />
+        <p className="text-sm text-ink-2">The scheduling replay reached {questions.replay.reachedTasks}/{questions.replay.eligibleTasks} eligible tasks, including {questions.replay.reachedHighRiskTasks}/{questions.replay.eligibleHighRiskTasks} high-risk tasks, under one assumed session per day.</p>
       </Section>
 
       <Section
@@ -192,7 +201,7 @@ export default function Validation() {
         ) : (
           <Card className="flex items-center gap-3">
             <Hourglass size={18} aria-hidden="true" className="text-muted" />
-            <p className="text-sm text-ink-2">Pending: collecting real answers. Nothing has been scored yet.</p>
+            <p className="text-sm text-ink-2">Pending: no external answers scored.</p>
           </Card>
         )}
       </Section>

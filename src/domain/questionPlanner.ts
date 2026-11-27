@@ -4,9 +4,10 @@
  * phone-call script that asks about every patient-side task.
  */
 import { getDrug } from './drugs';
-import { FEED_SOURCE_FOR, VERIFY_THRESHOLD } from './gapEngine';
+import { dependencyKind } from './careGraph';
+import { evaluate, FEED_SOURCE_FOR, VERIFY_THRESHOLD, type Evaluation } from './gapEngine';
 import { boxHelperAr, doseAsWritten, medNameAr, openMedsTextAr, questionTextAr } from './patientPhrasing';
-import type { CareTask, Day, Evidence, Patient, Question, Risk, TaskStatus } from './types';
+import type { AuditEntry, CareTask, Day, Evidence, Gap, Patient, Question, Risk } from './types';
 
 export const MAX_TASK_QUESTIONS = 5;
 /** Open question, patient voice (male form; see openMedsTextAr for others). */
@@ -14,10 +15,13 @@ export const OPEN_MEDS_TEXT = 'فيه أي دواء ثاني تاخذه ما ذ�
 
 const RISK_ORDER: Record<Risk, number> = { high: 0, medium: 1, low: 2 };
 const PATIENT_OWNERS = new Set(['patient', 'family']);
+const MAX_OPEN_PRESENTATIONS_PER_DAY = 2;
 
 export interface QuestionPlan {
-  /** Adaptive: at most MAX_TASK_QUESTIONS task questions + the open medicines question. */
+  /** Adaptive: at most MAX_TASK_QUESTIONS task questions plus OPEN_MEDS when eligible. */
   questions: Question[];
+  /** Still eligible for another session, in priority order. */
+  deferredTaskIds: string[];
   /** Baseline "full phone-call script": one question per patient-side task in the window + the open question. */
   baseline: Question[];
 }
@@ -47,6 +51,7 @@ export function questionForTask(task: CareTask, patient: Patient): Question {
   return {
     id: `q:${task.id}`,
     taskId: task.id,
+    taskType: task.type,
     kind,
     expects: kind === 'STOPPED_CHECK' ? 'STOPPED' : 'DONE',
     textAr: questionTextAr(task, patient, 'patient'),
@@ -94,40 +99,100 @@ export function openMedsQuestion(patient: Patient, today: Day): Question {
 const byRiskThenDeadline = (a: CareTask, b: CareTask) =>
   RISK_ORDER[a.risk] - RISK_ORDER[b.risk] || a.deadlineDay - b.deadlineDay || a.id.localeCompare(b.id);
 
+function hasRelevantReview(gaps: readonly Gap[], observation: Evidence | undefined): boolean {
+  return !!observation && gaps.some((gap) => gap.route !== 'PATIENT_REMINDER' &&
+    (gap.triggerEvidenceIds ?? gap.evidenceIds).includes(observation.id) && (gap.type === 'LOW_CONFIDENCE' ||
+      (observation.confidence >= VERIFY_THRESHOLD && !observation.candidateDrugIds?.length &&
+        ['NOT_STARTED', 'STOPPED_STILL_TAKEN', 'WRONG_DOSE', 'FOLLOWUP_MISSED', 'TASK_NOT_COMPLETED'].includes(gap.type))));
+}
+
 export function planQuestions(
   patient: Patient,
   tasks: readonly CareTask[],
   evidence: readonly Evidence[],
-  statuses: Readonly<Record<string, TaskStatus>>,
+  evaluation: Pick<Evaluation, 'gaps' | 'followup'>,
   today: Day,
+  audit: readonly AuditEntry[] = [],
 ): QuestionPlan {
-  const known = evidence.filter((e) => e.patientId === patient.id && e.day <= today);
-  const evidenceFor = (taskId: string) => known.filter((e) => e.taskId === taskId).sort((a, b) => a.day - b.day);
-
-  const inWindow = tasks.filter((t) => PATIENT_OWNERS.has(t.owner) && t.deadlineDay <= today + 1).sort(byRiskThenDeadline);
-
-  const isUncertain = (task: CareTask): boolean => {
-    const status = statuses[task.id];
-    if (status === 'VERIFIED' || status === 'CLOSED') return false;
-    const ev = evidenceFor(task.id);
-    // Already answered with confidence: the answer is known (verified, or a gap for a clinician).
-    const latest = ev.at(-1);
-    if (latest && latest.confidence >= VERIFY_THRESHOLD) return false;
-    // Feed-verifiable tasks: only ask once the feed is silent past the due day.
-    const feed = FEED_SOURCE_FOR[task.type];
-    if (feed) return today > task.deadlineDay && !ev.some((e) => e.source === feed);
-    return true;
+  const globalDay = (patient.dischargeDay ?? 0) + today;
+  const attempts = new Map<string, AuditEntry>();
+  let openPresented = 0;
+  let openAnswered = false;
+  for (const entry of audit) {
+    if (entry.day < (patient.dischargeDay ?? 0) || entry.day > globalDay ||
+        (entry.action !== 'CHECKIN_PRESENTED' && entry.action !== 'CHECKIN_ANSWER')) continue;
+    if (entry.target === patient.id && entry.day === globalDay) {
+      if (entry.action === 'CHECKIN_PRESENTED') openPresented++;
+      else openAnswered = true;
+    }
+    if (entry.day >= (attempts.get(entry.target)?.day ?? -1)) attempts.set(entry.target, entry);
+  }
+  const evidencePosition = new Map(evidence.map((record, index) => [record.id, index]));
+  const changedSince = (task: CareTask, observation: Evidence | undefined, attempt: AuditEntry | undefined) => {
+    if (!observation || !attempt) return false;
+    const attemptDay = attempt.day - (patient.dischargeDay ?? 0);
+    const count = attempt.evidenceCount ?? evidence.length;
+    if ((observation.recordedDay ?? observation.day) <= attemptDay && (evidencePosition.get(observation.id) ?? -1) < count) return false;
+    const prior = evaluate(patient, [task], evidence.slice(0, count), [], attemptDay).followup.get(task.id)?.observation;
+    return !prior || prior.claim !== observation.claim || prior.drugId !== observation.drugId ||
+      prior.candidateDrugIds?.join() !== observation.candidateDrugIds?.join() ||
+      (prior.confidence >= VERIFY_THRESHOLD) !== (observation.confidence >= VERIFY_THRESHOLD) ||
+      prior.day < observation.day;
   };
 
+  const inWindow = tasks.filter((t) => {
+    if (!PATIENT_OWNERS.has(t.owner) || t.deadlineDay > today + 1) return false;
+    const end = t.type === 'MED_CONTINUE' ? patient.plan.meds.find((m) => m.drugId === t.refId)?.treatmentEndDay : undefined;
+    return end === undefined || today <= end;
+  }).sort(byRiskThenDeadline);
+
   const open = openMedsQuestion(patient, today);
+  const urgent = new Set<string>();
+  const eligible = inWindow.filter((task) => {
+    const fact = evaluation.followup.get(task.id);
+    const observation = fact?.observation;
+    if (fact?.supportedCompletion || hasRelevantReview(evaluation.gaps, observation)) return false;
+    if (FEED_SOURCE_FOR[task.type] && today <= task.deadlineDay) return false;
+    const attempt = attempts.get(task.id);
+    const newObservation = changedSince(task, observation, attempt);
+    if (attempt?.day === globalDay && !newObservation) return false;
+    if (task.risk === 'high' && task.deadlineDay <= today && (!attempt || newObservation)) urgent.add(task.id);
+    return true;
+  });
+  const byId = new Map(eligible.map((task) => [task.id, task]));
+  // Within a risk tier, ask other eligible tasks before a continuation whose start still needs an answer.
+  const startsBefore = (task: CareTask) => task.dependsOn.filter((id) => {
+    const predecessor = byId.get(id);
+    return predecessor && dependencyKind(predecessor, task) === 'question_priority';
+  });
+  const waitingForStart = (task: CareTask) => startsBefore(task).length > 0;
+  const ranked = eligible.sort((a, b) =>
+    RISK_ORDER[a.risk] - RISK_ORDER[b.risk] ||
+    Number(waitingForStart(a)) - Number(waitingForStart(b)) ||
+    Number(urgent.has(b.id)) - Number(urgent.has(a.id)) ||
+    byRiskThenDeadline(a, b));
+  const selected = ranked.slice(0, MAX_TASK_QUESTIONS);
+  // Reserve one non-urgent slot for the longest unserved task. A continuation
+  // cannot use this slot to jump ahead of an eligible start.
+  const lastAsked = (task: CareTask) => attempts.get(task.id)?.day ?? -1;
+  const deferred = ranked.slice(MAX_TASK_QUESTIONS);
+  for (const waiting of [...deferred].sort((a, b) => lastAsked(a) - lastAsked(b))) {
+    const required = startsBefore(waiting);
+    if (required.some((id) => !selected.some((t) => t.id === id))) continue;
+    const replace = selected.map((task) => !urgent.has(task.id) && lastAsked(waiting) < lastAsked(task) &&
+      !required.includes(task.id) && !selected.some((other) => startsBefore(other).includes(task.id))).lastIndexOf(true);
+    if (replace < 0) continue;
+    selected.splice(replace, 1);
+    selected.push(waiting);
+    break;
+  }
+  const selectedIds = new Set(selected.map((t) => t.id));
   return {
     questions: [
-      ...inWindow
-        .filter(isUncertain)
-        .slice(0, MAX_TASK_QUESTIONS)
-        .map((t) => questionForTask(t, patient)),
-      open,
+      ...selected.map((t) => questionForTask(t, patient)),
+      ...(!openAnswered && openPresented < MAX_OPEN_PRESENTATIONS_PER_DAY ? [open] : []),
     ],
+    deferredTaskIds: ranked.filter((t) => !selectedIds.has(t.id)).map((t) => t.id),
     baseline: [...inWindow.map((t) => questionForTask(t, patient)), open],
   };
 }

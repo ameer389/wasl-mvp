@@ -10,13 +10,15 @@
  * VERIFY_THRESHOLD (0.7) never verifies a task and is routed to a human.
  */
 import { DRUGS } from './drugs';
-import type { Evidence, EvidenceClaim, EvidenceSource, QuestionKind } from './types';
+import { VERIFY_THRESHOLD } from './medicationEvidence';
+import type { Evidence, EvidenceClaim, EvidenceSource, QuestionKind, TaskType } from './types';
 
 export type AnswerIntent =
   | 'YES'
   | 'NO'
   | 'UNSURE'
   | 'STOPPED'
+  | 'NEVER_STARTED'
   | 'STILL_TAKING'
   | 'NEW_DOSE'
   | 'OLD_DOSE'
@@ -72,7 +74,8 @@ const PHRASES: Array<[string, Category, number]> = [
   ['ما عاد ياخذ', 'NO_LONGER', 0.95], ['ما زلت', 'CONTINUE', 0.8], ['مازلت', 'CONTINUE', 0.8], ['ما زال', 'CONTINUE', 0.8],
   ['مازال', 'CONTINUE', 0.8], ['لا زلت', 'CONTINUE', 0.8], ['لازلت', 'CONTINUE', 0.8], ['كل يوم', 'CONTINUE', 0.7],
   ['زي قبل', 'OLD_ADJ', 0.85], ['مثل قبل', 'OLD_ADJ', 0.85], ['مثل اول', 'OLD_ADJ', 0.85], ['زي اول', 'OLD_ADJ', 0.85],
-  ['نفس الجرعه', 'OLD_ADJ', 0.85], ['مثل ما كنت', 'OLD_ADJ', 0.85], ['زي ما كنت', 'OLD_ADJ', 0.85],
+  ['مثل ما كنت', 'OLD_ADJ', 0.85], ['زي ما كنت', 'OLD_ADJ', 0.85],
+  ['باقي علي نفس الجرعه', 'OLD_ADJ', 0.85],
   ['زي ما', 'INSTRUCTED', 0.7], ['مثل ما', 'INSTRUCTED', 0.7], ['حسب ما', 'INSTRUCTED', 0.7], ['اللي قالوا', 'INSTRUCTED', 0.7],
   ['اللي قال', 'INSTRUCTED', 0.7], ['اللي كتبوا', 'INSTRUCTED', 0.7],
   ['ما فيه', 'NONE', 0.9], ['مافيه', 'NONE', 0.9], ['ما في', 'NONE', 0.9], ['ولا شي', 'NONE', 0.9], ['بس هذي', 'NONE', 0.9],
@@ -123,9 +126,9 @@ const START_LIKE: Partial<Record<Category, Reading>> = {
   RAN_OUT: ['NO', null],
 };
 const READINGS: Record<QuestionKind, Partial<Record<Category, Reading>>> = {
-  MED_START: START_LIKE,
+  MED_START: { ...START_LIKE, FORGOT: [null, null], RAN_OUT: [null, null] },
   MED_CONTINUE: START_LIKE,
-  YES_NO: { ...START_LIKE },
+  YES_NO: {},
   STOPPED_CHECK: {
     STOP: ['STOPPED', 'STILL_TAKING'],
     NO_LONGER: ['STOPPED', 'STILL_TAKING'],
@@ -134,10 +137,10 @@ const READINGS: Record<QuestionKind, Partial<Record<Category, Reading>>> = {
     CONTINUE: ['STILL_TAKING', 'STOPPED'],
   },
   DOSE_CHECK: {
-    NEW_ADJ: ['NEW_DOSE', 'OLD_DOSE'],
-    CHANGE: ['NEW_DOSE', 'OLD_DOSE'],
-    INSTRUCTED: ['NEW_DOSE', 'OLD_DOSE'],
-    OLD_ADJ: ['OLD_DOSE', 'NEW_DOSE'],
+    NEW_ADJ: ['NEW_DOSE', 'NO'],
+    CHANGE: [null, 'NO'],
+    INSTRUCTED: [null, 'NO'],
+    OLD_ADJ: ['OLD_DOSE', 'UNSURE'],
   },
   OPEN_MEDS: {
     NONE: ['NONE', null],
@@ -151,7 +154,7 @@ const ANSWER_READING: Record<QuestionKind, { yes: AnswerIntent; no: AnswerIntent
   MED_CONTINUE: { yes: 'YES', no: 'NO' },
   YES_NO: { yes: 'YES', no: 'NO' },
   STOPPED_CHECK: { yes: 'STOPPED', no: 'STILL_TAKING' },
-  DOSE_CHECK: { yes: 'NEW_DOSE', no: 'OLD_DOSE' },
+  DOSE_CHECK: { yes: 'NEW_DOSE', no: 'NO' },
   OPEN_MEDS: { yes: 'MENTIONS_MEDS', no: 'NONE' },
 };
 /** Weight multipliers for particles/categories that are weak for a kind. */
@@ -262,6 +265,7 @@ export interface ParseOptions {
   questionKind: QuestionKind;
   /** The medicine the question was about (resolves shared informal names). */
   drugId?: string;
+  taskType?: TaskType;
   /** Speech recogniser confidence 0..1, if the answer was spoken. */
   asrConfidence?: number;
 }
@@ -276,6 +280,15 @@ export interface ParseResult {
   confidence: number;
   /** Human-readable cues used, for explainability. */
   cues: string[];
+  /** Per-clause meaning, separate from names found for extraction metrics. */
+  statements?: MedicationStatement[];
+  unknownUse?: boolean;
+  extractionDiscarded?: boolean;
+  speech?: { recognitionConfidence?: number; interpretationConfidence: number; conflict: boolean };
+}
+
+interface MedicationStatement extends MedMention {
+  use: 'current' | 'not_current' | 'historical' | 'mention' | 'uncertain';
 }
 
 interface Cue {
@@ -296,10 +309,10 @@ function stemCategory(token: string): { category: Category; weight: number; stem
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
-export function parseAnswer(text: string, options: ParseOptions): ParseResult {
+function parseCues(text: string, options: ParseOptions, scoped?: string[]): ParseResult {
   const kind = options.questionKind;
   const normalized = normalizeArabic(text);
-  const tokens = normalized.split(' ').filter(Boolean);
+  const tokens = (scoped?.join(' # ') ?? normalized).split(' ').filter(Boolean);
   const consumed = new Array<boolean>(tokens.length).fill(false);
   const cues: Cue[] = [];
   const readings = READINGS[kind];
@@ -307,7 +320,8 @@ export function parseAnswer(text: string, options: ParseOptions): ParseResult {
 
   const addCategory = (category: Category, weight: number, negated: boolean, label: string) => {
     const reading = readings[category];
-    const intent = reading ? reading[negated ? 1 : 0] : null;
+    const intent = kind === 'STOPPED_CHECK' && category === 'START' && negated
+      ? 'NEVER_STARTED' : reading ? reading[negated ? 1 : 0] : null;
     if (intent) cues.push({ intent, weight: weight * weightFor(category), label: `${negated ? 'neg+' : ''}${label}→${intent}` });
   };
 
@@ -321,8 +335,8 @@ export function parseAnswer(text: string, options: ParseOptions): ParseResult {
     // Sentence-initial «لا» is the reply "no", not a negator.
     if (j < 0) return false;
     const t = tokens[j] as string;
-    if (t === 'لا' && j === 0) return false;
-    return NEGATORS.has(t) && !consumed[j];
+    if (t === 'لا' && (j === 0 || tokens[j - 1] === '#')) return false;
+    return (NEGATORS.has(t) || NEGATORS.has(t.slice(1)) && t.startsWith('و')) && !consumed[j];
   };
 
   // 1) medicines
@@ -386,8 +400,9 @@ export function parseAnswer(text: string, options: ParseOptions): ParseResult {
     }
     if (token in NO_WORDS) {
       // «ابد ما …» = "never" (intensifies the negation that follows); mid-sentence «لا» before a cue negates it.
-      const intensifier = (token === 'ابد' || token === 'ابدا') && !!next && NEGATORS.has(next);
-      const negator = token === 'لا' && i > 0 && isCueToken(next);
+      const intensifier = (token === 'ابد' || token === 'ابدا') &&
+        ((!!next && NEGATORS.has(next)) || (!next && cues.some((c) => c.label.startsWith('neg+'))));
+      const negator = token === 'لا' && i > 0 && tokens[i - 1] !== '#' && isCueToken(next);
       if (negator) return; // left unconsumed so the next cue sees it
       if (!intensifier) cues.push({ intent: answers.no, weight: NO_WORDS[token] as number, label: `no:${token}→${answers.no}` });
       consumed[i] = true;
@@ -398,6 +413,7 @@ export function parseAnswer(text: string, options: ParseOptions): ParseResult {
     // attached negation: «ماوقفتها», «مابديت»
     let core = token;
     let negated = precededByNegator(i);
+    if (core.startsWith('وما') && core.length > 5) core = core.slice(1);
     if (core.startsWith('ما') && core.length > 4 && stemCategory(core.slice(2))) {
       core = core.slice(2);
       negated = true;
@@ -405,6 +421,10 @@ export function parseAnswer(text: string, options: ParseOptions): ParseResult {
     // Try the word as-is first: «وقفتها» starts with و but it is the verb, not "and".
     const hit = stemCategory(core) ?? stemCategory(stripConj(core)) ?? stemCategory(stripAl(core));
     if (hit) {
+      // A time adverb qualifies the following action. It does not assert continued use.
+      if (scoped && /^(?:للحين|لحين|لسا|لسه)$/.test(core) &&
+          !/^(?:عليه|عليها)$/.test(next ?? '')) return;
+      if (scoped && core === 'باقي' && next && NEGATORS.has(next)) return;
       addCategory(hit.category, hit.weight, negated, token);
       consumed[i] = true;
     }
@@ -445,6 +465,230 @@ export function parseAnswer(text: string, options: ParseOptions): ParseResult {
   return { intent, meds, ambiguousMeds, confidence: round2(confidence), cues: [...cueLabels, ...extra] };
 }
 
+const USE = /(?:^| )(?:[ويتن]?اخذ|[ويتن]?استخدم|[ويتن]?اشرب|[ونت]?عطي|مستمر|ما زلت|ما زال|ياخذه)\p{L}*(?= |$)/u;
+const NO_LONGER_USE = /(?:^| )(?:ما ?عاد(?:ت)?|ما عدت)(?= |$)/;
+const NO_USE = /(?:^| )(?:(?:ما|مو|مب|مش|لم|ولا)\s*(?:[يتن]?اخذ|[يتن]?استخدم|[يتن]?اشرب|اعطي|نعطي|مستمر|بديت|بدا)|ما ?عاد|ما عدت|ت?وقفت|وقفنا|تركت)\p{L}*(?= |$)/u;
+const HISTORICAL = /(?:^| )(?:كنت|كنا|كان|كانت|زمان|سابقا|اول|امس|قبل|(?:اخذت|اخذنا|استخدمت)(?:ه|ها|هم)?)(?= |$)/;
+const OLD_COMPARISON = /(?:زي|مثل) (?:ما كنت(?: (?:اخذ|استخدم)(?:ه|ها)?(?: قبل التغيير)?)?|اول|قبل)/g;
+const CURRENT = /(?:^| )(?:الحين|للحين|دحين|الان|الى الان|حاليا|اليوم|ما زلت|ما زال)(?= |$)/;
+const BACKGROUND = /(?:^| )(?:كنت|كنا|كان|كانت|زمان|امس|سابقا)(?= |$)/;
+const UNCERTAIN_USE = /(?:^| )(?:يمكن|ممكن|مدري|مادري|ما ادري|ما اعرف|اظن|اعتقد|مب متاكد|مو متاكد|ماني متاكد|هل)(?= |$)/;
+const CONDITION = /(?:^| )(?:اذا|لو)(?= |$)/;
+const FUTURE = /(?:^| )(?:ابي|ابغي|ودي|ناوي(?:ه)?|بنوي|راح|بكره|غدا|لازم|المفروض|اقدر|يقدر|تقدر|نقدر|(?:باخذ|بابدا|ببدا|باستخدم|باوقف|بيوقف|بيستخدم|بياخذ|بيسوي)(?:ه|ها|هم)?)(?= |$)/;
+const REPORTED_INSTRUCTION = /^(?:(?:الدكتور|الطبيب|الممرضه) )?(?:قال|قالت|قالوا|وصاني|نصحني)(?= |$)/;
+const PRIOR_START = /(?:^| )(?:كنت|كنا|كان|كانت|زمان|سابقا|قبل الخروج|قبل التنويم)(?= |$)/;
+const NAME_UNCERTAINTY = /(?:^| )ما (?:اعرف|ادري) (?:وش )?اسم(?:ه|ها)(?= |$)/g;
+const NEGATED_STOP = /(?:^| )(?:ما|مو|مب|لم)\s*(?:ت?وقف|ترك|بطل)\p{L}*(?= |$)/u;
+const NONMED_ACTION: Partial<Record<TaskType, RegExp>> = {
+  LAB_DONE: /(?:حللت|سويت التحليل|عملت التحليل|طلع التحليل|تحللت|حللنا)/,
+  FOLLOWUP_BOOKED: /(?:حجزت|حجزنا|انحجز|حجزوا|تاكد الموعد)/,
+  FOLLOWUP_ATTENDED: /(?:رحت|رحنا|حضر(?:ت|نا)?)(?= (?:الموعد|العياده|للعياده|المراجعه|للمراجعه)(?: |$)|$)|وصلت العياده/,
+  WOUND_CHECK: /(?:فحصت|فحصنا|شيكت|شيكنا|شفت الجرح|كشفنا)/,
+};
+
+interface Clause {
+  text: string;
+  dependent: boolean;
+  pastContext: boolean;
+}
+
+/** A comma alone cannot end a condition: «إذا توفر، آخذ …» is still hypothetical. */
+function clauses(text: string): Clause[] {
+  const parts = text.split(/[،,؛;.…؟!?\n]+/).flatMap((part) => normalizeArabic(part)
+    .replace(/(^| )(?:بس|لكن|ولكن) /g, '|~')
+    .replace(/ و(?=(?:الحين|للحين|دحين|حاليا|الان|اليوم|امس|زمان|سابقا|كنت|كنا|اذا|لو|بكره|راح|ناوي(?:ه)?|ودي) )/g, '|')
+    .replace(/ (?:وما|ولا)(?=\s|اخذ|ياخذ|استخدم|بديت|وقفت|تركت|سويت|رحت|حجزت|فحصت|حللت)/g, '|ما')
+    .replace(/ و(?=(?:اخذ|ياخذ|استخدم|يستخدم|نعطي|اعطي|بديت|بدينا|وقفت|وقفنا|تركت|رحت|حجزت|فحصت|حللت)\p{L}*(?: |$))/gu, '|')
+    .split('|')).map((part) => part.trim()).filter(Boolean);
+  let condition = false;
+  let pastContext = false;
+  const result: Clause[] = [];
+  for (const part of parts) {
+    const clause = part.replace(/^~/, '');
+    if (part.startsWith('~') && CURRENT.test(clause)) condition = false;
+    if (CURRENT.test(clause)) pastContext = false;
+    condition ||= CONDITION.test(clause);
+    result.push({ text: clause, dependent: condition || FUTURE.test(clause) || REPORTED_INSTRUCTION.test(clause), pastContext });
+    pastContext ||= /^(?:ما )?(?:كنت|كنا|كان|كانت) /.test(clause);
+  }
+  return result;
+}
+
+function historical(part: string, kind: QuestionKind): boolean {
+  if (kind === 'MED_START') return PRIOR_START.test(part);
+  const temporal = kind === 'DOSE_CHECK' ? part.replace(OLD_COMPARISON, '') : part;
+  return HISTORICAL.test(temporal) && (!CURRENT.test(temporal) || BACKGROUND.test(temporal));
+}
+
+function openStatements(parts: Clause[]): { statements: MedicationStatement[]; unknownUse: boolean } {
+  const merged = new Map<string, MedicationStatement>();
+  let unknownUse = false;
+  let previousMention: MedMention | undefined;
+  for (const { text: part, dependent, pastContext } of parts) {
+    const mentions = findMedMentions(part);
+    const except = /(?:^| )الا(?= |$)/.exec(part);
+    const relevant = except && (except.index === 0 || part.slice(0, except.index) === 'لا' || NO_USE.test(part.slice(0, except.index)))
+      ? part.slice(except.index).trim() : part;
+    const scopedMentions = relevant === part ? mentions : findMedMentions(relevant);
+    const affirmative = USE.test(relevant) || relevant.startsWith('الا ');
+    const negative = NO_USE.test(relevant);
+    const use = dependent ? 'mention' : UNCERTAIN_USE.test(part.replace(NAME_UNCERTAINTY, ' ')) || NEGATED_STOP.test(relevant) ||
+      /(?:^| )لا (?=تاخذ|تستخدم|تعطي)/.test(relevant) ||
+      (negative && affirmative && !NO_LONGER_USE.test(relevant) && USE.test(relevant.replace(NO_USE, ' ')))
+      ? 'uncertain' : pastContext || historical(part, 'OPEN_MEDS') ? 'historical' : negative ? 'not_current' : affirmative ? 'current' : 'mention';
+    if (!mentions.length && previousMention && CURRENT.test(part) &&
+        /(?:^| )(?:[يتن]?اخذ|[يتن]?استخدم|وقفت|تركت)(?:ه|ها)(?= |$)/.test(part)) {
+      scopedMentions.push(previousMention);
+    }
+    previousMention = !dependent && mentions.length === 1 && mentions[0]?.drugIds.length === 1 ? mentions[0] : undefined;
+    if (!scopedMentions.length && use === 'current' && /(?:^| )(?:دوا|دواء|حبوب|حبه|علاج|اعشاب|بخاخ|مسكن)\p{L}*(?= |$)/u.test(relevant)) unknownUse = true;
+    for (const mention of scopedMentions) {
+      const key = mention.drugIds.length === 1 ? mention.drugIds[0]! : mention.text;
+      const previous = merged.get(key);
+      const previousCurrent = previous && (previous.use === 'current' || previous.use === 'not_current');
+      const current = use === 'current' || use === 'not_current';
+      if (previous?.use === 'uncertain' || (previousCurrent && current && previous?.use !== use)) {
+        merged.set(key, { ...mention, use: 'uncertain' });
+      } else if (!previousCurrent || current || use === 'uncertain') {
+        merged.set(key, { ...mention, use });
+      }
+    }
+  }
+  return { statements: [...merged.values()], unknownUse };
+}
+
+export function parseAnswer(text: string, options: ParseOptions): ParseResult {
+  const original = parseCues(text, options);
+  const { questionKind: kind, drugId } = options;
+  const parts = clauses(text);
+  const normalized = normalizeArabic(text);
+  const asr = options.asrConfidence ?? 1;
+  const unresolved = (reason: string): ParseResult => ({
+    ...original, intent: 'UNSURE', confidence: Math.min(original.confidence, UNSURE_CONFIDENCE_CAP), cues: [...original.cues, reason],
+  });
+  if (kind === 'OPEN_MEDS') {
+    const { statements, unknownUse } = openStatements(parts);
+    const current = statements.some((s) => s.use === 'current');
+    const review = statements.some((s) => s.use === 'mention' || s.use === 'uncertain');
+    const negative = statements.some((s) => s.use === 'not_current');
+    const intent = current || unknownUse ? 'MENTIONS_MEDS'
+      : review ? 'UNSURE' : negative ? 'NONE' : statements.length ? 'UNSURE' : original.intent;
+    const assertedUse = current || negative || unknownUse;
+    const confidence = intent === 'UNSURE' || (parts.some((p) => p.dependent) && !assertedUse)
+      ? Math.min(original.confidence, UNSURE_CONFIDENCE_CAP)
+      : assertedUse ? Math.max(original.confidence, round2(0.85 * asr)) : original.confidence;
+    return { ...original, intent, confidence, statements, unknownUse };
+  }
+  const mentions = findMedMentions(normalized);
+  const actual = parts.filter((part) => !part.dependent && !part.pastContext).map((part) => part.text);
+  if (kind === 'YES_NO') {
+    if (mentions.length || USE.test(normalized) || NO_USE.test(normalized) || /(?:^| )(?:الدواء|الدوا|الحبوب|حبه)(?= |$)/.test(normalized)) {
+      return unresolved('medication statement does not answer this task');
+    }
+    if (actual.length === 0 && parts.length) return unresolved('conditional or future task report');
+    const targetAction = options.taskType && NONMED_ACTION[options.taskType];
+    if (targetAction) {
+      const actions = actual.flatMap((part) => {
+        const action = targetAction.exec(part);
+        if (!action) return [];
+        const negated = /(?:^| )(?:ما|مو|مب|لم|لا)\s*$/.test(part.slice(0, action.index));
+        return [negated ? 'NO' : 'YES'];
+      });
+      if (actions.length) {
+        const scoped = parseCues(text, options, actual);
+        const intent = actions[0] as 'YES' | 'NO';
+        if (actual.some((part) => UNCERTAIN_USE.test(part) || PRIOR_START.test(part) ||
+            (options.taskType === 'WOUND_CHECK' && historical(part, 'YES_NO'))) ||
+            actions.some((action) => action !== intent) ||
+            scoped.cues.some((cue) => cue.endsWith(intent === 'YES' ? '→NO' : '→YES'))) {
+          return unresolved('uncertain or conflicting task answer');
+        }
+        return { ...original, intent, confidence: round2(0.85 * asr) };
+      }
+    }
+    if (options.taskType && Object.values(NONMED_ACTION).some((match) => match.test(normalized))) {
+      return unresolved('different task action');
+    }
+    if (options.taskType && /^(?:ما )?تم(?: الحمدلله)?$/.test(normalized)) {
+      return { ...original, intent: normalized.startsWith('ما ') ? 'NO' : 'YES', confidence: round2(0.85 * (options.asrConfidence ?? 1)) };
+    }
+    if (options.taskType && (original.intent === 'YES' || original.intent === 'NO') &&
+        normalized.split(' ').some((word) => !(word in YES_WORDS || word in NO_WORDS || FILLERS.has(word) ||
+          ['الحمدلله', 'الحمد', 'لله', 'تم', 'للحين', 'بس'].includes(word)))) {
+      return unresolved('answer does not describe the requested task');
+    }
+    return parts.some((p) => p.dependent) ? unresolved('conditional or future task report') : original;
+  }
+  const resolvePolarity = (result: ParseResult, scopedParts: string[]): ParseResult => {
+    const scopedText = scopedParts.join(' # ');
+    if (kind !== 'DOSE_CHECK') {
+      if (kind === 'MED_CONTINUE' && Object.keys(PARTIAL_PHRASES).some((phrase) => scopedText.includes(phrase)) &&
+          !result.cues.some((c) => c.startsWith('unsure:'))) {
+        return { ...result, intent: 'NO', confidence: round2(0.8 * (options.asrConfidence ?? 1)) };
+      }
+      const polarity = kind === 'STOPPED_CHECK' ? ['STOPPED', 'STILL_TAKING'] : ['YES', 'NO'];
+      if (polarity.every((intent) => result.cues.some((c) => c.endsWith(`→${intent}`)))) {
+        return { ...result, intent: 'UNSURE', confidence: Math.min(result.confidence, UNSURE_CONFIDENCE_CAP) };
+      }
+      return result;
+    }
+    const deniesNewDose = /(?:^| )(?:(?:ما|مو|مب|مش|ماني)\s+(?:علي |اخذ(?:ت)? )?|لا اخذ )(?:الجرعه )?الجديده?(?= |$)/;
+    const deniesOldDose = /(?:^| )(?:(?:ما|مو|مب|مش|ماني)\s+(?:علي |اخذ(?:ت)? )?|لا اخذ )(?:الجرعه )?القديمه?(?= |$)/;
+    const isDoseDescription = /(?:^| )(?:(?:علي|اخذ(?:ت)?|ياخذ) (?:الجرعه )?(?:القديمه?|الجديده?)|(?:اخذ|ياخذ) (?:مثل|زي)|باقي علي نفس الجرعه)(?= |$)|^(?:(?:اي|ايه|نعم) )?(?:الجرعه )?(?:القديمه?|الجديده?)(?: \S+ (?:وحده|وحدات|ملغ|حبه))?$/;
+    const isPriorComparison = /(?:^| )علي (?:\S+ ){1,3}(?:وحده|وحدات|ملغ|حبه|الجرعه) (?:مثل|زي) (?:قبل|اول)(?= |$)/;
+    const deniesNew = scopedParts.some((part) => deniesNewDose.test(part));
+    const doseCues = scopedParts.filter((part) => !deniesNewDose.test(part))
+      .map((part) => ({ part, cues: parseCues(part, options).cues.filter((c) => !c.startsWith('yes:') && /→(?:OLD_DOSE|NEW_DOSE)$/.test(c)) }))
+      .filter(({ cues }) => cues.length);
+    if (scopedParts.some((part) => deniesOldDose.test(part)) ||
+        (!deniesNew && doseCues.some(({ part }) => !isDoseDescription.test(part) && !isPriorComparison.test(part)))) {
+      return unresolved('dose mentioned without a supported usage description');
+    }
+    const described = doseCues.filter(({ part }) => isDoseDescription.test(part) || isPriorComparison.test(part));
+    const old = described.some(({ cues }) => cues.some((c) => c.endsWith('→OLD_DOSE')));
+    const newDose = described.some(({ cues }) => cues.some((c) => c.endsWith('→NEW_DOSE')));
+    if ((old || deniesNew) && newDose) return unresolved('conflicting dosage descriptions');
+    if (old && !result.cues.some((c) => c.endsWith('→UNSURE') || c.startsWith('unsure:'))) {
+      return { ...result, intent: 'OLD_DOSE', confidence: round2(0.8 * (options.asrConfidence ?? 1)) };
+    }
+    if (deniesNew && !result.cues.some((c) => c.startsWith('unsure:') || c.startsWith('yes:'))) {
+      return { ...result, intent: 'NO', confidence: round2(0.85 * (options.asrConfidence ?? 1)) };
+    }
+    if (deniesNew) return unresolved('conflicting dosage answer');
+    return result;
+  };
+  let scoped = actual;
+  if (drugId && mentions.length) {
+    const refersToTarget = (part: string) => findMedMentions(part).some((m) => m.drugIds.includes(drugId));
+    if (!mentions.some((m) => m.drugIds.includes(drugId))) return unresolved('explicit medication reference does not match this question');
+    const matched = scoped.filter(refersToTarget);
+    if (matched.some((part) => findMedMentions(part).some((m) => !m.drugIds.includes(drugId)))) {
+      return unresolved('multiple medication references in one clause');
+    }
+    if (mentions.some((m) => !m.drugIds.includes(drugId))) scoped = matched;
+  }
+  let relevant = scoped.filter((part) => !historical(part, kind));
+  if (!relevant.length && kind === 'STOPPED_CHECK' && scoped.length === 1 &&
+      /^(?:وقفت|وقفنا|تركت)(?:ه|ها)? (?:\S+ )?امس$/.test(scoped[0]!)) {
+    relevant = scoped;
+  }
+  if (!relevant.length && parts.length) {
+    // Preserve the legacy polarity hint for unwillingness, at non-verifying confidence.
+    if (kind === 'MED_CONTINUE' && /^ما (?:ابي|ابغي) اوقف/.test(normalized)) {
+      return { ...original, confidence: Math.min(original.confidence, UNSURE_CONFIDENCE_CAP) };
+    }
+    return unresolved(scoped.length ? 'historical report does not establish current use' : 'no asserted event for this medication');
+  }
+  const target = parseCues(text, options, relevant);
+  const historicalMiss = kind === 'MED_CONTINUE' && target.intent === 'YES' && parts.every(({ text: part, dependent }) =>
+    !dependent && (relevant.includes(part) || (scoped.includes(part) &&
+      /(?:^| )امس(?= |$)/.test(part) && (NO_USE.test(part) || /(?:^| )نسيت(?= |$)/.test(part)))));
+  if (relevant.length < parts.length && !historicalMiss && !target.cues.some((cue) => /^(?!yes:|no:).*→/.test(cue))) {
+    return unresolved('no supported assertion in the current context');
+  }
+  return resolvePolarity({ ...target, meds: original.meds, ambiguousMeds: original.ambiguousMeds }, relevant);
+}
+
 // ═══ Mapping to evidence ════════════════════════════════════════════════════
 
 export interface ClaimDraft {
@@ -452,6 +696,7 @@ export interface ClaimDraft {
   confidence: number;
   drugId?: string;
   detail?: string;
+  candidateDrugIds?: string[];
 }
 
 const lowConfidence = (c: number) => Math.min(c, UNSURE_CONFIDENCE_CAP);
@@ -462,7 +707,17 @@ const lowConfidence = (c: number) => Math.min(c, UNSURE_CONFIDENCE_CAP);
  */
 export function toEvidenceClaim(parse: ParseResult, questionKind: QuestionKind): ClaimDraft[] {
   const { intent, confidence } = parse;
-  const unsure: ClaimDraft[] = [{ claim: 'UNSURE', confidence: lowConfidence(confidence) }];
+  const candidates = [...new Set(parse.ambiguousMeds.flatMap((m) => m.drugIds))];
+  const different = parse.cues.includes('explicit medication reference does not match this question');
+  const named = parse.meds.map((id) => DRUGS.find((d) => d.id === id)?.generic).filter(Boolean);
+  const unsure: ClaimDraft[] = [{
+    claim: 'UNSURE',
+    confidence: lowConfidence(confidence),
+    ...(candidates.length ? { candidateDrugIds: candidates } : {}),
+    ...(different && named.length ? { detail: `Answer mentioned a different medicine: ${named.join(', ')}` } : {}),
+  }];
+  if (parse.extractionDiscarded) return [];
+  if (questionKind !== 'OPEN_MEDS' && confidence < VERIFY_THRESHOLD && intent !== 'NEVER_STARTED') return unsure;
 
   switch (questionKind) {
     case 'MED_START':
@@ -472,23 +727,40 @@ export function toEvidenceClaim(parse: ParseResult, questionKind: QuestionKind):
       if (intent === 'NO') return [{ claim: 'NOT_DONE', confidence }];
       return unsure;
     case 'STOPPED_CHECK':
+      if (intent === 'NEVER_STARTED') return [{ ...unsure[0]!, detail: 'Reported never starting this medicine' }];
       if (intent === 'STOPPED' || intent === 'YES') return [{ claim: 'STOPPED', confidence }];
       if (intent === 'STILL_TAKING' || intent === 'NO') return [{ claim: 'STILL_TAKING', confidence }];
       return unsure;
     case 'DOSE_CHECK':
       if (intent === 'NEW_DOSE' || intent === 'YES') return [{ claim: 'DONE', confidence }];
-      if (intent === 'OLD_DOSE' || intent === 'NO') return [{ claim: 'OLD_DOSE', confidence }];
+      if (intent === 'OLD_DOSE') return [{ claim: 'OLD_DOSE', confidence }];
+      if (intent === 'NO') return [{ claim: 'NOT_DONE', confidence, detail: 'Reported not using the new dose; actual dose unspecified' }];
       return unsure;
     case 'OPEN_MEDS': {
-      if (intent === 'NONE') return [];
-      if (intent !== 'MENTIONS_MEDS') return unsure;
-      const drafts: ClaimDraft[] = parse.meds.map((drugId) => ({ claim: 'TAKING_UNLISTED', confidence, drugId }));
-      for (const m of parse.ambiguousMeds) {
-        const names = m.drugIds.map((id) => DRUGS.find((d) => d.id === id)?.generic ?? id).join(', ');
-        drafts.push({ claim: 'TAKING_UNLISTED', confidence, detail: `«${m.text}» (could be: ${names})` });
+      if (parse.statements?.length || parse.unknownUse) {
+        const drafts = [...(parse.statements ?? [])].sort((a, b) => a.drugIds.length - b.drugIds.length).map((s): ClaimDraft => {
+          const known = s.drugIds.length === 1;
+          const supported = confidence >= VERIFY_THRESHOLD && known;
+          const claim = supported && s.use === 'current' ? 'TAKING_UNLISTED'
+            : supported && s.use === 'not_current' ? 'STOPPED' : 'UNSURE';
+          const names = s.drugIds.map((id) => DRUGS.find((d) => d.id === id)?.generic ?? id).join(', ');
+          return {
+            claim, confidence: claim === 'UNSURE' ? lowConfidence(confidence) : confidence,
+            ...(known ? { drugId: s.drugIds[0] } : { candidateDrugIds: s.drugIds }),
+            ...(!known ? { detail: `«${s.text}» (could be: ${names})` }
+              : s.use === 'historical' ? { detail: 'Historical use; current use unspecified' }
+                : s.use === 'mention' ? { detail: 'Medicine mentioned; use unspecified' } : {}),
+          };
+        });
+        if (parse.unknownUse) drafts.push({
+          claim: confidence >= VERIFY_THRESHOLD ? 'TAKING_UNLISTED' : 'UNSURE',
+          confidence,
+          detail: 'Unidentified medicine explicitly reported in use',
+        });
+        return drafts;
       }
-      if (drafts.length === 0) drafts.push({ claim: 'TAKING_UNLISTED', confidence, detail: 'Unidentified medicine or herb mentioned' });
-      return drafts;
+      if (intent === 'NONE') return confidence >= VERIFY_THRESHOLD ? [] : unsure;
+      return unsure;
     }
   }
 }
@@ -501,9 +773,11 @@ export function answerToEvidence(
     questionKind: QuestionKind;
     patientId: string;
     taskId?: string;
+    expectedDrugId?: string;
     day: number;
     source: EvidenceSource;
     idPrefix: string;
+    voice?: Evidence['voice'];
   },
 ): Evidence[] {
   return toEvidenceClaim(parse, args.questionKind).map((draft, i) => ({
@@ -513,9 +787,13 @@ export function answerToEvidence(
     source: args.source,
     day: args.day,
     claim: draft.claim,
-    ...(draft.drugId ? { drugId: draft.drugId } : {}),
+    ...(draft.drugId ? { drugId: draft.drugId }
+      : draft.claim !== 'UNSURE' && args.expectedDrugId ? { drugId: args.expectedDrugId } : {}),
     ...(draft.detail ? { detail: draft.detail } : {}),
+    ...(args.questionKind === 'OPEN_MEDS' ? { reportId: args.idPrefix } : {}),
+    ...(draft.candidateDrugIds ? { candidateDrugIds: draft.candidateDrugIds } : {}),
     rawText,
+    ...(args.voice ? { voice: args.voice } : {}),
     confidence: draft.confidence,
     confirmedByHuman: false,
   }));

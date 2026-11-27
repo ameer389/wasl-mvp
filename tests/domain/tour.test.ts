@@ -9,7 +9,7 @@ import { SAMPLE_PATIENTS } from '../../src/data/samplePatients';
 import { CONSOLE_PAGES } from '../../src/routes';
 import { seedState } from '../../src/state/demoState';
 import { demoReducer } from '../../src/state/reducer';
-import { CLEAN_CONTROLS, GAP_TYPES, INJECTED_SCENARIOS, generateScenarios, runGapDetection, runQuestionReduction } from '../../validation/scenarios';
+import { CLEAN_CONTROLS, ORIGINAL_GAP_TYPES, INJECTED_SCENARIOS, generateScenarios, phase06Scenarios, runGapDetection, runQuestionReduction } from '../../validation/scenarios';
 
 describe('tour reducer', () => {
   it('has 8 steps that each name a screen and an element to highlight', () => {
@@ -52,7 +52,9 @@ describe('tour reducer', () => {
 
   it('in the store, starting the tour resets to the seed at Day 2 and steps move the day', () => {
     let s = demoReducer(seedState(), { type: 'SET_DAY', day: 9 });
-    s = demoReducer(s, { type: 'RESOLVE_GAP', gapId: 'x', action: 'RESOLVED', by: 'Dr', at: 't' });
+    s = demoReducer(s, { type: 'RESOLVE_GAP', gapId: 'demo-001:STOPPED_STILL_TAKEN:demo-001/MED_STOP/clopidogrel@d1',
+      action: 'RESOLVED', by: 'Dr', at: 't', disposition: 'ADMINISTRATIVE', reasonCode: 'HANDED_OFF', note: 'Handed off' });
+    expect(s.resolutions).toHaveLength(1);
     s = demoReducer(s, { type: 'TOUR', event: { type: 'START' } });
     expect(s.simulatedDay).toBe(TOUR_START_DAY);
     expect(s.resolutions).toEqual([]);
@@ -94,6 +96,15 @@ describe('plain-words display helpers', () => {
 });
 
 describe('validation scenario generator', () => {
+  it('reports Phase 06 focused outcomes separately from historical cases', () => {
+    const report = runGapDetection(phase06Scenarios());
+    expect(report).toMatchObject({
+      scenarios: 7, controls: 1, expectedGaps: 7, truePositives: 7,
+      falsePositives: 0, falseNegatives: 0, highRiskGaps: 1, highRiskRoutedNow: 1,
+    });
+    expect(report.perType.TASK_NOT_COMPLETED.expected).toBe(3);
+    expect(report.perType.FOLLOWUP_ATTENDANCE_UNCONFIRMED.expected).toBe(2);
+  });
   const scenarios = generateScenarios();
 
   it('is deterministic for a seed and different for another seed', () => {
@@ -101,13 +112,16 @@ describe('validation scenario generator', () => {
     expect(generateScenarios(7)).not.toEqual(scenarios);
   });
 
-  it('builds 50 injected cases covering every gap type at least 4 times, plus 10 clean controls', () => {
+  it('builds 50 injected cases plus 10 controls and routes the nine weak medication reports to review', () => {
     expect(scenarios.filter((s) => s.kind === 'injected')).toHaveLength(INJECTED_SCENARIOS);
     expect(scenarios.filter((s) => s.kind === 'control')).toHaveLength(CLEAN_CONTROLS);
-    for (const type of GAP_TYPES) {
+    for (const type of ORIGINAL_GAP_TYPES) {
       const n = scenarios.flatMap((s) => s.expected).filter((e) => e.type === type).length;
-      expect(n, type).toBeGreaterThanOrEqual(4);
+      if (type === 'DUPLICATE_THERAPY') expect(n).toBe(3); // Two of the five reports are below the confidence floor.
+      else expect(n, type).toBeGreaterThanOrEqual(4);
     }
+    const openReviews = scenarios.flatMap((s) => s.expected).filter((g) => g.type === 'LOW_CONFIDENCE' && !g.key.includes('/'));
+    expect(openReviews).toHaveLength(9);
     for (const s of scenarios.filter((x) => x.kind === 'control')) expect(s.expected).toEqual([]);
   });
 

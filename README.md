@@ -7,7 +7,7 @@
 ![MEDATHON 2026](https://img.shields.io/badge/MEDATHON%202026-Track%202%20·%20Healthcare%20Digital%20Transformation-0b2230?style=flat-square)
 
 - **Live demo:** https://ameer389.github.io/wasl-mvp/ (replace `ameer389` with the GitHub user or org that hosts the repo)
-- **Start the guided demo (3 min):** open the live demo and press *Start the guided demo*. It follows one synthetic patient from discharge to a resolved care gap.
+- **Start the guided demo (3 min):** open the demo and press *Start the guided demo*. It follows one synthetic patient’s plan and demonstrates how a clinician can review and act on a gap from seeded evidence.
 
 > **Research prototype. Not a medical device. Synthetic data only.** WASL never recommends doses, prescribes or diagnoses. It surfaces gaps and routes them to a human.
 
@@ -15,14 +15,14 @@
 
 ## The problem
 
-After discharge, nobody checks what actually happens at home. Medicines get stopped on paper but kept at home, new doses are not started, labs and follow-ups slip. The gap is found late, if at all.
+After discharge, changes made at home can differ from the written plan. Stopped medicines may still be used, new doses may be missed, and labs or follow-ups can slip.
 
 ## What WASL does
 
 1. **Plan → tasks.** A discharge plan becomes a care graph: each medicine, lab and follow-up is a task with an owner, a deadline and a risk level.
-2. **Patient answers.** Each day the patient or a family member answers a few questions, by voice in Saudi dialect or with big buttons. Only what is still uncertain is asked.
-3. **Expected vs actual.** The engine compares what the plan expected with what was answered and what the lab and appointment systems report, and raises gaps with the rule that fired.
-4. **Clinician acts only on gaps.** Gaps are ranked by risk and routed: *now*, *within 24h*, or *patient reminder*. Every action is written to an audit trail.
+2. **Patient answers.** Patients or family members can use Saudi Arabic voice input, text or quick answers when the planner finds eligible questions.
+3. **Expected vs actual.** The engine compares the plan with eligible answers and simulated lab or appointment events. A verified task has eligible supporting evidence for that task. Overlapping drug classes are flagged as potential duplicate therapy for review.
+4. **Clinician reviews and acts.** The demo ranks gaps by risk and displays simulated escalation or reminder routes. It records review, intervention, re-verification and closure in the audit trail. Evidence-supported resolution and administrative disposition have distinct statuses.
 
 ## Screenshots
 
@@ -39,12 +39,12 @@ After discharge, nobody checks what actually happens at home. Medicines get stop
 | Area | Status |
 |---|---|
 | Care graph generation from a discharge plan | ✅ Built and tested |
-| Gap engine (10 gap types, verification threshold, routing, resolutions) | ✅ Built and tested |
+| Gap engine (12 gap types, verification threshold, routing, resolutions) | ✅ Built and tested |
 | Saudi-dialect answer parser (rule-based, explainable) | ✅ Built, evaluated on a labelled set |
 | Adaptive question planner | ✅ Built and tested |
 | Clinician console (queue, patients, detail, graph, expected vs actual, audit, new discharge) | ✅ Built, runs in the browser |
 | Patient app (check-in, family mode, medicines, appointments, help) | ✅ Built, runs in the browser |
-| Voice input | ⚠️ Browser Web Speech API (Chrome, Edge, Safari). Not available in Firefox. |
+| Voice input | ⚠️ Depends on the browser’s Web Speech API and microphone permissions. Text and quick answers remain available. |
 | Patients, labs, appointments, answers | 🧪 Simulated: synthetic patients and a simulated clock |
 | EHR / FHIR integration | ❌ Not built |
 | Real database, persistence beyond the browser | ❌ Not built (state is in memory and localStorage) |
@@ -55,11 +55,11 @@ After discharge, nobody checks what actually happens at home. Medicines get stop
 ## Safety by design
 
 - **No autonomous clinical decisions.** Reasons are descriptive and tested not to be prescriptive (no "increase", "stop taking", "double", …).
-- **Low confidence goes to a human.** Answers below 70% confidence never verify a task. They become a gap for a clinician. Uncertain answers are routed the same way.
+- **Low confidence goes to a human.** Answers below 70% confidence cannot verify a task. Relevant uncertain evidence can trigger clarification.
 - **Explainable.** Every gap shows the expected task, the evidence (with the patient's exact words), and the rule that fired.
 - **Audit trail.** Every answer, call, confirmation and resolution is recorded with the day, time, actor and note.
 - **Synthetic data only.** No real patient data. Every screen shows a *DEMO · synthetic data* badge.
-- **Voice privacy.** The browser's speech service sends audio to the browser vendor (Google for Chrome, Apple for Safari). A production system would use a self-hosted Saudi-dialect ASR so audio never leaves the hospital's environment.
+- **Voice privacy.** The browser’s speech service may process audio remotely. Use synthetic statements only.
 
 ## Validation
 
@@ -71,16 +71,17 @@ All results come from synthetic data generated by the team, except the external 
 | Gap detection precision | **100%** (0 unexpected gaps) | same |
 | False positives on clean cases | **0** in 10 clean controls × 15 days | synthetic controls |
 | High-risk gaps routed to a clinician now | **100%** (23 of 23) | same |
-| Parser accuracy (held-out test split) | **97.4%** (76 of 78) | synthetic Saudi-dialect answers |
-| Parser safe failures | **2 of 2** wrong answers had confidence < 0.7 (0 unsafe) | same |
-| Question reduction | **79.7%** fewer questions (vs a full script every day) | 900 synthetic patient-days |
+| Focused Phase 06 gap detection | **7/7** expected, 0 unexpected, 0 on clean control, **1/1** high-risk route | separate synthetic cases |
+| Phase 04B parser agreement | **65/78 (83.3%)** intent, **12/20 (60%)** difficult subset, **5/9 (55.6%)** exact medicine extraction | repeated comparison using synthetic written Saudi Arabic answers |
+| Parser label disagreements | **11/13** below 0.7. Both at or above the threshold are generic dosage denials | same |
+| Question planning | **1,747 vs 8,304 (79.0% fewer)** | 900 synthetic patient-days against a hypothetical full daily script |
+| Scheduling replay | **466/466** eligible tasks reached, including **135/135** high-risk tasks | separate assumed one-session-per-day replay with zero answers |
 | Safety invariants | **5 of 5** passed | automated tests |
 | External real-user check | **Pending** | — |
 
 **Caveats.**
-- The rules are deterministic and the scenarios were written by the same team. A high gap-detection score shows the logic is coverage-complete for the cases we designed. It is not real-world accuracy.
-- The parser and its test answers were written by the same team. Real accuracy will be lower.
-- The question-reduction figure compares against a full script asked every day, which nobody does today. It is an upper bound, and the "minutes saved" figure is an assumption.
+- The team authored the rules, synthetic scenarios and written parser benchmark. Phase 04B reused the frozen split and labels. Live speech recognition and independent accuracy remain unmeasured.
+- The planning comparison counts planned questions. Replay coverage counts tasks reached under simulated presentations. Actual presentations, answers and staff time were unmeasured in these comparisons.
 
 Full details: [`validation/RESULTS.md`](validation/RESULTS.md). The same numbers, with the methods and limitations, are on the **Validation** page of the console.
 
@@ -129,10 +130,16 @@ npm run dev        # http://localhost:5173/wasl-mvp/
 npm test           # unit tests (Vitest)
 npm run build      # type-check and production build
 npm run validate   # writes validation/results.json and RESULTS.md
-npm run eval:parser  # parser dev/test evaluation
+npm run eval:parser -- --dev-only  # development evaluation without rewriting the Phase 04 result
 ```
 
 Browser checks (`npm run check:views`) need the dev server running and a local Chrome install.
+For the integrated new-patient check, run `npm run build`, start `npm run preview -- --host 127.0.0.1 --port 4173 --strictPort`, then run `node scripts/check-integrated.mjs`.
+See the [Phase 08 engineering report](docs/phase08-engineering-handoff.md) for installation findings and domain contracts.
+
+### Optional local HUMAIN Voice experiment
+
+Use Node 24 and `npm ci`. Configure `.env.humain.local` privately using `.env.example`, start `npm run voice:broker` in a separate terminal, and set `VITE_HUMAIN_VOICE_ENABLED=true` when starting the app on `http://127.0.0.1:5173/wasl-mvp/`. Open the HUMAIN check-in link on the synthetic patient’s Today page and consent before starting. Review and confirm each answer in WASL. The standard check-in can run on its own. See the [Phase 09B handoff](docs/phase09b-hybrid-voice-integration.md).
 
 ## Tech stack
 

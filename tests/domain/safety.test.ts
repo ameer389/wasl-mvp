@@ -22,7 +22,7 @@ function allSampleGaps(): Gap[] {
   return gaps;
 }
 
-/** One scenario that triggers all ten gap types at once. */
+/** One scenario that triggers the ten original seeded gap types together. */
 function everyGapType(): Gap[] {
   return run(
     [
@@ -39,7 +39,7 @@ function everyGapType(): Gap[] {
 }
 
 describe('safety invariants', () => {
-  it('the combined scenario covers all ten gap types', () => {
+  it('the combined scenario covers the ten original seeded gap types', () => {
     const types = new Set(everyGapType().map((g) => g.type));
     const all: GapType[] = ['NOT_STARTED', 'STOPPED_STILL_TAKEN', 'WRONG_DOSE', 'DUPLICATE_THERAPY', 'UNLISTED_MED', 'LAB_MISSED', 'FOLLOWUP_NOT_BOOKED', 'FOLLOWUP_MISSED', 'NO_RESPONSE', 'LOW_CONFIDENCE'];
     expect([...types].sort()).toEqual([...all].sort());
@@ -87,14 +87,21 @@ describe('safety invariants', () => {
     }
   });
 
-  it('resolveGap always writes an audit entry', () => {
+  it('accepted lifecycle actions are audited and invalid resolutions leave state untouched', () => {
     let state = seedState();
-    for (const action of ['CALLED', 'CONFIRMED', 'RESOLVED'] as const) {
+    const gapId = 'demo-001:STOPPED_STILL_TAKEN:demo-001/MED_STOP/clopidogrel@d1';
+    const valid = [
+      { action: 'CALLED', contactOutcome: 'reached' },
+      { action: 'INTERVENED' },
+      { action: 'RESOLVED', disposition: 'ADMINISTRATIVE', reasonCode: 'HANDED_OFF' },
+    ] as const;
+    for (const action of valid) {
       const before = state.audit.length;
-      state = demoReducer(state, { type: 'RESOLVE_GAP', gapId: 'g1', action, by: 'Dr Test', note: 'note', at: '2026-11-13T00:00:00.000Z' });
+      state = demoReducer(state, { type: 'RESOLVE_GAP', gapId, ...action, by: 'Dr Test', note: 'note', at: '2026-11-13T00:00:00.000Z' });
       expect(state.audit).toHaveLength(before + 1);
-      expect(state.audit.at(-1)).toMatchObject({ action: `GAP_${action}`, target: 'g1', actor: 'Dr Test', day: state.simulatedDay });
+      expect(state.audit.at(-1)).toMatchObject({ action: `GAP_${action.action}`, target: gapId, actor: 'Dr Test', day: state.simulatedDay });
     }
     expect(state.resolutions).toHaveLength(3);
+    expect(demoReducer(state, { type: 'RESOLVE_GAP', gapId: 'g1', action: 'RESOLVED', by: 'Dr Test', at: 't' })).toBe(state);
   });
 });

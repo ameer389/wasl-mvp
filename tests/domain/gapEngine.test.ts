@@ -102,14 +102,14 @@ describe('gap rules (positive + near-miss negative)', () => {
     expect(gapsOfType(run([anyAnswer], 3), 'NO_RESPONSE').map((g) => g.taskId)).not.toContain(T.apixabanStart);
   });
 
-  it('LOW_CONFIDENCE: latest patient answer below 0.7 and not confirmed', () => {
+  it('LOW_CONFIDENCE: a patient flag cannot substitute for sufficient evidence', () => {
     const unsure = ev({ taskId: T.apixabanStart, source: 'patient_voice', day: 1, claim: 'DONE', confidence: 0.55 });
     expect(gapsOfType(run([unsure], 1), 'LOW_CONFIDENCE')[0]).toMatchObject({ taskId: T.apixabanStart, route: 'CLINICIAN_NOW' });
 
     const sure = { ...unsure, id: 'sure', confidence: 0.7 };
     expect(gapsOfType(run([sure], 1), 'LOW_CONFIDENCE')).toHaveLength(0);
     const confirmed = { ...unsure, id: 'confirmed', confirmedByHuman: true };
-    expect(gapsOfType(run([confirmed], 1), 'LOW_CONFIDENCE')).toHaveLength(0);
+    expect(gapsOfType(run([confirmed], 1), 'LOW_CONFIDENCE')).toHaveLength(1);
   });
 
   it('low-confidence claims do not fire the claim rules (they become LOW_CONFIDENCE instead)', () => {
@@ -121,6 +121,24 @@ describe('gap rules (positive + near-miss negative)', () => {
 });
 
 describe('verification threshold', () => {
+  it('verifies continuation independently, then accepts a late start without changing its deadline', () => {
+    const continued = ev({ taskId: T.apixabanCont3, source: 'patient_app', day: 3, claim: 'DONE' });
+    const before = run([continued], 3);
+    expect(before.taskStatus[T.apixabanCont3]).toBe('VERIFIED');
+    expect(before.taskStatus[T.apixabanStart]).not.toBe('VERIFIED');
+    const started = ev({ taskId: T.apixabanStart, source: 'patient_app', day: 4, claim: 'DONE' });
+    expect(run([continued, started], 3).taskStatus[T.apixabanStart]).not.toBe('VERIFIED');
+    expect(run([continued, started], 4).taskStatus[T.apixabanStart]).toBe('VERIFIED');
+    expect(before.tasks.find((t) => t.id === T.apixabanStart)?.deadlineDay).toBe(1);
+  });
+
+  it('verifies attendance even without either the booking or the lab record', () => {
+    const attended = ev({ taskId: T.attended, source: 'appointment_system', day: 7, claim: 'DONE' });
+    const result = run([attended], 8);
+    expect(result.taskStatus[T.attended]).toBe('VERIFIED');
+    expect(gapsOfType(result, 'FOLLOWUP_NOT_BOOKED')).toHaveLength(1);
+    expect(gapsOfType(result, 'LAB_MISSED')).toHaveLength(1);
+  });
   it('0.69 does not verify; 0.70 verifies', () => {
     const at = (confidence: number) =>
       run([ev({ taskId: T.apixabanStart, source: 'patient_voice', day: 1, claim: 'DONE', confidence })], 1).taskStatus[T.apixabanStart];

@@ -19,14 +19,13 @@ export const MED_GROUP_AR: Record<MedAction, string> = {
 
 /**
  * Status of one medicine for the patient: the care team is following up if any
- * of its tasks has an open gap; confirmed if every task due so far is verified
- * (or closed); otherwise waiting for an answer.
+ * of its tasks has an open gap; confirmed if every task due so far is verified.
  */
 export function medStatusFor(drugId: string, tasks: readonly CareTask[], statuses: Readonly<Record<string, TaskStatus>>, today: Day): MedPatientStatus {
   const mine = tasks.filter((t) => t.refId === drugId && t.type.startsWith('MED_'));
   if (mine.some((t) => statuses[t.id] === 'GAP' || statuses[t.id] === 'ESCALATED')) return 'team';
   const due = mine.filter((t) => t.deadlineDay <= today);
-  const done = (t: CareTask) => statuses[t.id] === 'VERIFIED' || statuses[t.id] === 'CLOSED';
+  const done = (t: CareTask) => statuses[t.id] === 'VERIFIED';
   if (due.length > 0 && due.every(done)) return 'confirmed';
   if (due.length === 0 && mine.some(done)) return 'confirmed';
   return 'waiting';
@@ -57,8 +56,8 @@ export interface ApptItem {
 
 const STATUS_AR: Record<ApptKind, Record<ApptState, string>> = {
   lab: { done: 'وصلت النتيجة', missing: 'ما وصلتنا النتيجة للحين', pending: 'بانتظار التحليل' },
-  book: { done: 'انحجز الموعد', missing: 'ما انحجز للحين', pending: 'بانتظار الحجز' },
-  visit: { done: 'تم الحضور', missing: 'الفريق بيتواصل معك بخصوصه', pending: 'موعدك' },
+  book: { done: 'انحجز الموعد', missing: 'ما تأكّد الحجز للحين', pending: 'بانتظار الحجز' },
+  visit: { done: 'تم الحضور', missing: 'حالة الحضور تحتاج مراجعة', pending: 'موعدك' },
 };
 
 /** Labs and follow-ups as the patient sees them, ordered by day. Status comes from the feeds. */
@@ -66,7 +65,7 @@ export function appointmentItems(patient: Patient, tasks: readonly CareTask[], s
   const items: ApptItem[] = [];
   const stateOf = (t: CareTask): ApptState => {
     const s = statuses[t.id];
-    if (s === 'VERIFIED' || s === 'CLOSED') return 'done';
+    if (s === 'VERIFIED') return 'done';
     if (s === 'GAP' || s === 'ESCALATED') return 'missing';
     return 'pending';
   };

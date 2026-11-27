@@ -30,8 +30,8 @@ const P5 = SAMPLE_PATIENTS[4] as Patient; // Abu Abdullah: never answers
 
 function questionsFor(p: Patient, day: number): Question[] {
   const tasks = buildCareGraph(p);
-  const { taskStatus } = evaluate(p, tasks, SAMPLE_EVIDENCE, [], day);
-  return planQuestions(p, tasks, SAMPLE_EVIDENCE, taskStatus, day).questions;
+  const evaluation = evaluate(p, tasks, SAMPLE_EVIDENCE, [], day);
+  return planQuestions(p, tasks, SAMPLE_EVIDENCE, evaluation, day).questions;
 }
 
 const parsed = (text: string, kind: QuestionKind, drugId?: string) => parseAnswer(text, { questionKind: kind, drugId });
@@ -153,7 +153,7 @@ describe('answer → evidence', () => {
     const ev = evidenceForAnswer({ ...base, question: open, parse, rawText: 'اخذ بنادول وحبة المعده', mode: 'text' });
     expect(ev.map((e) => [e.claim, e.drugId ?? null, e.taskId ?? null])).toEqual([
       ['TAKING_UNLISTED', 'paracetamol', null],
-      ['TAKING_UNLISTED', null, null],
+      ['UNSURE', null, null],
     ]);
     expect(ev[1]?.detail).toContain('Omeprazole');
     const none = evidenceForAnswer({ ...base, question: open, parse: quickParse(QUICK_OPTIONS.OPEN_MEDS[0]!), rawText: 'لا', mode: 'button' });
@@ -235,8 +235,9 @@ describe('store: check-in answers', () => {
     const before = s.audit.length;
     s = demoReducer(s, { type: 'RECORD_ANSWER', patientId: 'demo-001', evidence: ev, actor: 'Patient app', target: 'demo-001', note: 'n', at: 't' });
     expect(s.evidence.slice(-2).map((e) => e.id)).toEqual(['x1', 'x2']);
-    expect(s.audit).toHaveLength(before + 1);
-    expect(s.audit.at(-1)).toMatchObject({ action: 'CHECKIN_ANSWER', target: 'demo-001' });
+    expect(s.audit.slice(before).filter((entry) => entry.action === 'CHECKIN_ANSWER'))
+      .toEqual([expect.objectContaining({ target: 'demo-001' })]);
+    expect(s.audit.slice(before).some((entry) => entry.action === 'GAP_DETECTED')).toBe(true);
     s = demoReducer(s, { type: 'COMPLETE_CHECKIN', patientId: 'demo-001', actor: 'Patient app', note: '3 answers', at: 't' });
     expect(s.audit.at(-1)).toMatchObject({ action: 'CHECKIN_COMPLETED', day: s.simulatedDay });
   });
@@ -249,5 +250,14 @@ describe('care graph fit mode', () => {
     expect(layoutCareGraph(tasks, m).width).toBeLessThanOrEqual(992);
     expect(fitGraphMetrics(tasks, 300).dayWidth).toBe(40); // floor
     expect(taskId('a', 'MED_START', 'b', 1)).toBe('a/MED_START/b@d1');
+  });
+
+  it('fits a Day 30 graph on desktop and keeps its last task in the scrollable layout', () => {
+    const task = { ...buildCareGraph(P1)[0]!, deadlineDay: 30 };
+    const layout = layoutCareGraph([task], fitGraphMetrics([task], 992));
+    expect(layout.lastDay).toBe(30);
+    expect(layout.width).toBeLessThanOrEqual(992);
+    expect(layout.nodes[0]!.x + layout.nodes[0]!.width).toBeLessThan(layout.width);
+    expect(layoutCareGraph([task]).width).toBeGreaterThan(layout.width);
   });
 });

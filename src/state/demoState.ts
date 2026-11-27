@@ -1,9 +1,10 @@
 import { SAMPLE_EVIDENCE, SAMPLE_PATIENTS, SEED_AUDIT, SEED_DAY } from '../data/samplePatients';
 import { INITIAL_TOUR, type TourState } from '../domain/tour';
 import type { AuditEntry, Day, Evidence, GapResolution, Patient } from '../domain/types';
+import { observeLifecycle } from './lifecycle';
 
-/** Bump when the shape of DemoState or the seed changes; old saved state is discarded. */
-export const STATE_VERSION = 3;
+/** Compatible previous versions are read by persistence.ts. */
+export const STATE_VERSION = 9;
 
 export interface DemoState {
   version: number;
@@ -18,7 +19,7 @@ export interface DemoState {
 
 /** Fresh copy of the synthetic seed ("Reset demo" restores exactly this). */
 export function seedState(): DemoState {
-  return structuredClone({
+  return observeLifecycle(structuredClone({
     version: STATE_VERSION,
     patients: SAMPLE_PATIENTS,
     evidence: SAMPLE_EVIDENCE,
@@ -26,5 +27,5 @@ export function seedState(): DemoState {
     audit: SEED_AUDIT,
     simulatedDay: SEED_DAY,
     tour: INITIAL_TOUR,
-  });
+  }));
 }

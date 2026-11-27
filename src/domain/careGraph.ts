@@ -62,6 +62,7 @@ export function buildCareGraph(patient: Patient): CareTask[] {
           labelAr: `بدء ${drug.nameAr}`,
         });
         for (const day of MED_DEADLINES.continueChecks) {
+          if (med.treatmentEndDay !== undefined && day > med.treatmentEndDay) continue;
           add({
             ...base,
             type: 'MED_CONTINUE',
@@ -92,6 +93,7 @@ export function buildCareGraph(patient: Patient): CareTask[] {
         });
         break;
       case 'CONTINUE':
+        if (med.treatmentEndDay !== undefined && MED_DEADLINES.continueExisting > med.treatmentEndDay) break;
         add({
           ...base,
           type: 'MED_CONTINUE',
@@ -103,21 +105,18 @@ export function buildCareGraph(patient: Patient): CareTask[] {
     }
   }
 
-  const labTasks = plan.labs.map((lab) => {
+  for (const lab of plan.labs) {
     const linked = lab.linkedDrugId ? requireDrug(lab.linkedDrugId) : undefined;
-    return {
-      lab,
-      task: add({
-        type: 'LAB_DONE',
-        refId: lab.id,
-        owner: 'patient',
-        deadlineDay: lab.dueDay,
-        risk: linked?.highAlert ? 'high' : 'medium',
-        label: `${lab.test} lab test${linked ? ` (monitoring ${linked.generic})` : ''}`,
-        labelAr: `تحليل ${lab.testAr ?? lab.test}`,
-      }),
-    };
-  });
+    add({
+      type: 'LAB_DONE',
+      refId: lab.id,
+      owner: 'patient',
+      deadlineDay: lab.dueDay,
+      risk: linked?.highAlert ? 'high' : 'medium',
+      label: `${lab.test} lab test${linked ? ` (monitoring ${linked.generic})` : ''}`,
+      labelAr: `تحليل ${lab.testAr ?? lab.test}`,
+    });
+  }
 
   for (const fu of plan.followUps) {
     const clinicAr = fu.clinicAr ?? fu.clinic;
@@ -136,7 +135,7 @@ export function buildCareGraph(patient: Patient): CareTask[] {
       owner: 'patient',
       deadlineDay: fu.visitDay,
       risk: 'medium',
-      dependsOn: [booked.id, ...labTasks.filter(({ lab }) => lab.dueDay < fu.visitDay).map(({ task }) => task.id)],
+      dependsOn: [booked.id],
       label: `Attend ${fu.clinic} follow-up`,
       labelAr: `حضور موعد ${clinicAr}`,
     });
@@ -154,5 +153,32 @@ export function buildCareGraph(patient: Patient): CareTask[] {
     });
   }
 
+  if (!hasValidTaskDependencies(pid, tasks)) throw new Error('Invalid care graph');
   return tasks;
+}
+
+/** Only a start check is relevant to ordering questions about subsequent use. */
+export function dependencyKind(predecessor: CareTask, task: CareTask): 'question_priority' | 'information' {
+  return predecessor.type === 'MED_START' && task.type === 'MED_CONTINUE' && predecessor.refId === task.refId
+    ? 'question_priority'
+    : 'information';
+}
+
+export function hasValidTaskDependencies(patientId: string, tasks: readonly CareTask[]): boolean {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  if (byId.size !== tasks.length) return false;
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (id: string): boolean => {
+    if (visiting.has(id)) return false;
+    if (visited.has(id)) return true;
+    const task = byId.get(id);
+    if (!task || task.patientId !== patientId) return false;
+    visiting.add(id);
+    if (!task.dependsOn.every(visit)) return false;
+    visiting.delete(id);
+    visited.add(id);
+    return true;
+  };
+  return tasks.every((task) => visit(task.id));
 }

@@ -104,7 +104,7 @@ export default function CareGaps() {
   return (
     <div className="flex flex-col gap-6">
       <section aria-label="Summary" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard label="Open gaps" value={clinician.length} hint={`+ ${reminders.length} handled as patient reminders`} simulated />
+        <StatCard label="Open gaps" value={clinician.length} hint={`+ ${reminders.length} eligible for in-app follow-up`} simulated />
         <StatCard label="High risk now" value={escalationsNow(evaluation.gaps).length} hint="Routed to a clinician now" simulated />
         <StatCard
           label="Tasks verified"
@@ -113,9 +113,9 @@ export default function CareGaps() {
           simulated
         />
         <StatCard
-          label="Questions asked today"
+          label="Questions planned today"
           value={`${savings.adaptive} vs ${savings.baseline}`}
-          hint={`−${savings.reductionPct}% vs the full phone script`}
+          hint={`−${savings.reductionPct}% vs a hypothetical full script`}
           simulated
         />
       </section>
@@ -214,7 +214,7 @@ export default function CareGaps() {
                 Act
                 <InfoTip term="route" align="end" />
               </span>
-              <span className="text-right">Priority</span>
+              <span className="text-right" title="Routing urgency first, then priority score">Priority</span>
             </div>
             <ul ref={listRef} aria-label="Care gaps, highest priority first" className="divide-y divide-line">
               {rows.map((row, i) => {
@@ -327,12 +327,12 @@ export default function CareGaps() {
         <summary className={cn('flex cursor-pointer list-none items-center gap-2 rounded-xl px-4 py-3 text-sm', focusRing)}>
           <ChevronRight size={14} aria-hidden="true" className="text-muted transition-transform duration-150 group-open:rotate-90" />
           <BellRing size={14} aria-hidden="true" className="text-muted" />
-          <span className="font-medium">Patient reminders</span>
+          <span className="font-medium">In-app follow-up</span>
           <span className="text-muted tabular-nums">({reminders.length})</span>
           <span className="ms-auto text-xs text-faint">Low-risk items routed to the patient app — no clinician action needed</span>
         </summary>
         {reminders.length === 0 ? (
-          <p className="border-t border-line px-4 py-3 text-sm text-muted">No reminders today.</p>
+          <p className="border-t border-line px-4 py-3 text-sm text-muted">No in-app follow-up gaps today.</p>
         ) : (
           <ul className="divide-y divide-line border-t border-line">
             {reminders.map((g) => {

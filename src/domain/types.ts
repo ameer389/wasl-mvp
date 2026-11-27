@@ -19,6 +19,8 @@ export interface PlanMedication {
   prescriber: string;
   /** For CHANGED: the dose before admission. */
   previousDose?: string;
+  /** Last included patient day, counted from discharge (Day 0). Explicit plan data only. */
+  treatmentEndDay?: Day;
 }
 
 export interface PlanLab {
@@ -97,6 +99,7 @@ export interface CareTask {
   owner: Owner;
   deadlineDay: Day;
   risk: Risk;
+  /** Related predecessor tasks. Their status never controls independent verification. */
   dependsOn: string[];
 }
 
@@ -126,6 +129,17 @@ export interface Evidence {
   taskId?: string;
   source: EvidenceSource;
   day: Day;
+  /** Patient-relative day this record became known. Legacy records are known on `day`. */
+  recordedDay?: Day;
+  /** Position of the ingestion action in the persisted audit log. */
+  recordedSeq?: number;
+  /** Identifies one open medication answer, even when it yields several evidence records. */
+  reportId?: string;
+  candidateDrugIds?: string[];
+  /** Clinician correction of a specific past report, rather than a new current observation. */
+  correctsEvidenceId?: string;
+  eventKind?: 'DISPENSED' | 'USAGE' | 'LAB_RESULT' | 'APPOINTMENT_BOOKING' | 'APPOINTMENT_ATTENDANCE';
+  voice?: { recognitionConfidence?: number; interpretationConfidence: number; transcriptConfirmed: boolean; alternativesDisagreed?: true };
   claim: EvidenceClaim;
   drugId?: string;
   detail?: string;
@@ -147,6 +161,8 @@ export type GapType =
   | 'LAB_MISSED'
   | 'FOLLOWUP_NOT_BOOKED'
   | 'FOLLOWUP_MISSED'
+  | 'FOLLOWUP_ATTENDANCE_UNCONFIRMED'
+  | 'TASK_NOT_COMPLETED'
   | 'NO_RESPONSE'
   | 'LOW_CONFIDENCE';
 
@@ -165,11 +181,16 @@ export interface Gap {
   /** Plain-English, descriptive only (expected task, evidence, rule fired). Never prescriptive. */
   reasons: string[];
   evidenceIds: string[];
+  /** Evidence driving the rule. Other evidenceIds give supporting context. */
+  triggerEvidenceIds?: string[];
+  priorityFactors?: { severity: number; riskMultiplier: number; daysOverdue: number; uncertaintyBonus: number };
   detectedDay: Day;
   route: GapRoute;
 }
 
-export type ResolutionAction = 'CALLED' | 'CONFIRMED' | 'RESOLVED';
+export type ResolutionAction = 'CALLED' | 'CONFIRMED' | 'INTERVENED' | 'RESOLVED' | 'UNDONE';
+export type Disposition = 'ADMINISTRATIVE' | 'EVIDENCE_SUPPORTED' | 'REPORT_CORRECTED';
+export type AdministrativeReason = 'FOLLOW_UP_ARRANGED' | 'HANDED_OFF' | 'OTHER_DOCUMENTED';
 
 export interface GapResolution {
   gapId: string;
@@ -177,6 +198,25 @@ export interface GapResolution {
   action: ResolutionAction;
   by: string;
   note?: string;
+  seq?: number;
+  episodeId?: string;
+  /** Audit observation of the evidence revision being addressed. */
+  conditionId?: string;
+  fingerprint?: string;
+  evidenceIds?: string[];
+  outcomeEvidenceIds?: string[];
+  disposition?: Disposition;
+  reasonCode?: AdministrativeReason;
+  undoesSeq?: number;
+  contactOutcome?: 'reached' | 'no_answer';
+}
+
+export interface GapObservation {
+  gap: Gap;
+  episodeId: string;
+  fingerprint: string;
+  reopened?: true;
+  clearance?: { disposition: Exclude<Disposition, 'ADMINISTRATIVE'>; evidenceIds: string[] };
 }
 
 // ── Audit ─────────────────────────────────────────────────────────────────────
@@ -188,6 +228,13 @@ export type AuditAction =
   | 'GAP_CALLED'
   | 'GAP_CONFIRMED'
   | 'GAP_RESOLVED'
+  | 'GAP_INTERVENED'
+  | 'GAP_UNDONE'
+  | 'GAP_DETECTED'
+  | 'GAP_REOPENED'
+  | 'GAP_UPDATED'
+  | 'GAP_CONDITION_CLEARED'
+  | 'CHECKIN_PRESENTED'
   | 'CHECKIN_ANSWER'
   | 'CHECKIN_COMPLETED';
 
@@ -200,7 +247,13 @@ export interface AuditEntry {
   action: AuditAction;
   target: string;
   note?: string;
+  /** Position in the evidence log when the question was shown or its answer was saved. */
+  evidenceCount?: number;
+  openMedsOutcome?: OpenMedsOutcome;
+  observation?: GapObservation;
 }
+
+export type OpenMedsOutcome = 'NONE' | 'REPORTED' | 'UNCERTAIN' | 'UNKNOWN_MEDICINE' | 'DISCARDED';
 
 // ── Questions ─────────────────────────────────────────────────────────────────
 
@@ -219,6 +272,7 @@ export type QuestionKind = 'MED_START' | 'MED_CONTINUE' | 'STOPPED_CHECK' | 'DOS
 export interface Question {
   id: string;
   taskId?: string;
+  taskType?: TaskType;
   kind: QuestionKind;
   /** Simple Saudi dialect. */
   textAr: string;
