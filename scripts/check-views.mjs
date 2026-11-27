@@ -31,15 +31,13 @@ const answerAndConfirm = async (page, text) => {
 };
 const toEcho = async (page) => {
   await startCheckin(page);
-  await typeAnswer(page, 'ايه بديتها الحمدلله');
+  await typeAnswer(page, 'ايه للحين مستمر');
   await page.getByText(/فهمت إنك/).waitFor();
 };
 const toDone = async (page) => {
   await startCheckin(page);
-  await answerAndConfirm(page, 'ايه بديتها الحمدلله');
+  await answerAndConfirm(page, 'ايه للحين مستمر');
   await page.getByText(/سؤال ٢ من/).waitFor();
-  await page.getByRole('button', { name: 'إيه', exact: true }).click();
-  await page.getByText(/سؤال ٣ من/).waitFor();
   await page.getByRole('button', { name: 'لا، بس أدوية الدكتور' }).click();
   await page.getByText('شكراً، خلّصنا ✔').waitFor();
 };
@@ -195,13 +193,15 @@ const dayOf = async (page) =>
   const submit = page.locator('form').getByRole('button', { name: 'Mark resolved' });
   const disabledWithoutNote = await submit.isDisabled();
   await page.getByLabel('Resolution note (required)').fill('Spoke with son; clopidogrel removed from the pill box.');
+  const disabledWithoutReason = await submit.isDisabled();
+  await page.getByLabel('Administrative reason').selectOption('FOLLOW_UP_ARRANGED');
   await submit.click();
   const after = (await badge()).trim();
-  await page.getByRole('button', { name: 'Undo' }).click();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
   const undone = (await badge()).trim();
   report(
-    disabledWithoutNote && before !== after && undone === before && errors.length === 0,
-    `resolve flow: badge "${before}" → "${after}" → undo "${undone}", note required ${disabledWithoutNote}`,
+    disabledWithoutNote && disabledWithoutReason && before !== after && undone === before && errors.length === 0,
+    `resolve flow: badge "${before}" → "${after}" → undo "${undone}", note and reason required ${disabledWithoutNote && disabledWithoutReason}`,
     errors,
   );
   await context.close();
@@ -214,7 +214,9 @@ const dayOf = async (page) =>
   await page.getByRole('button', { name: 'Confirm what happened' }).first().click();
   await page.getByRole('radio', { name: 'Stopped' }).click();
   await page.getByRole('button', { name: 'Record confirmation' }).click();
-  const stillThere = await page.getByRole('heading', { name: 'Stopped medicine still being taken' }).count();
+  const activeStop = page.getByRole('heading', { name: 'Stopped medicine reported in use', exact: true });
+  await activeStop.waitFor({ state: 'hidden' });
+  const stillThere = await activeStop.count();
   await page.getByRole('tab', { name: 'Audit trail' }).click();
   const audited = await visible(page.getByRole('cell', { name: 'Care coordinator (demo)' }).or(page.getByText('Care coordinator (demo)')));
   report(stillThere === 0 && audited && errors.length === 0, `confirm flow: gap cleared ${stillThere === 0}, audited ${audited}`, errors);
@@ -266,26 +268,31 @@ const queueRows = async (page) => {
   const question = await page.getByRole('heading', { level: 1 }).innerText();
   await answerAndConfirm(page, 'لا والله ما بديتها');
   const rows = await queueRows(page);
-  const notStarted = rows.some((r) => r.includes('Abu Abdullah') && r.includes('New medicine not started') && r.includes('Start Amlodipine'));
+  const notStarted = rows.some((r) => r.includes('Abu Abdullah') && r.includes('New medicine reported not started') && r.includes('Start Amlodipine'));
   const noResponseForIt = rows.some((r) => r.includes('Abu Abdullah') && r.includes('No response') && r.includes('Start Amlodipine'));
   report(notStarted && !noResponseForIt && errors.length === 0, `E2E 1 demo-005 «${question}» → «لا والله ما بديتها»: NOT_STARTED ${notStarted}, NO_RESPONSE for that task gone ${!noResponseForIt}`, errors);
   await context.close();
 }
 
 {
-  // 2. Abu Mohammed confirms he started apixaban → LOW_CONFIDENCE closes, task VERIFIED.
+  // 2. Abu Mohammed's low-confidence start report stays with the team until clinical confirmation.
   const { context, page, errors } = await newPage(1440, 900);
   await page.goto(`${APP_URL}#/patient/demo-001/checkin`, { waitUntil: 'networkidle' });
   await startCheckin(page);
-  await answerAndConfirm(page, 'ايه بديتها الحمدلله');
+  const routedNotRepeated = !(await page.getByRole('heading', { level: 1 }).innerText()).includes('بديت');
   await page.goto(`${APP_URL}#/clinician/patient/demo-001`, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: 'Stopped medicine still being taken' }).waitFor();
-  const lowConf = await page.getByRole('heading', { name: 'Low-confidence answer: needs a human' }).count();
+  await page.getByRole('heading', { name: 'Stopped medicine reported in use' }).waitFor();
+  await page.getByRole('button', { name: 'Confirm what happened' }).last().click();
+  await page.getByRole('radio', { name: 'Started', exact: true }).click();
+  await page.getByRole('button', { name: 'Record confirmation' }).click();
+  const activeReview = page.getByRole('heading', { name: 'Evidence needs clarification', exact: true });
+  await activeReview.waitFor({ state: 'hidden' });
+  const lowConf = await activeReview.count();
   await page.goto(`${APP_URL}#/clinician/patient/demo-001?tab=expected`, { waitUntil: 'networkidle' });
   const row = page.getByRole('row', { name: /Start Apixaban/ });
   await row.waitFor();
   const verified = (await row.innerText()).includes('Verified');
-  report(lowConf === 0 && verified && errors.length === 0, `E2E 2 demo-001 «ايه بديتها الحمدلله»: LOW_CONFIDENCE closed ${lowConf === 0}, task Verified ${verified}`, errors);
+  report(routedNotRepeated && lowConf === 0 && verified && errors.length === 0, `E2E 2 demo-001 routed report not repeated ${routedNotRepeated}, LOW_CONFIDENCE closed ${lowConf === 0}, task Verified ${verified}`, errors);
   await context.close();
 }
 
@@ -295,11 +302,11 @@ const queueRows = async (page) => {
   await page.goto(`${APP_URL}#/patient/demo-005/checkin`, { waitUntil: 'networkidle' });
   await startCheckin(page);
   await typeAnswer(page, 'يمكن، ما ادري');
-  const nurse = await visible(page.getByText('بنخلي الممرضة تتأكد منك'));
+  const nurse = await visible(page.getByText('الجواب يحتاج مراجعة داخل العرض التجريبي'));
   await page.getByRole('button', { name: 'إيه صح' }).click();
   await page.getByRole('status').getByText('تم', { exact: true }).waitFor();
   const rows = await queueRows(page);
-  const low = rows.some((r) => r.includes('Abu Abdullah') && r.includes('Low-confidence answer') && r.includes('Start Amlodipine'));
+  const low = rows.some((r) => r.includes('Abu Abdullah') && r.includes('Evidence needs clarification') && r.includes('Start Amlodipine'));
   report(nurse && low && errors.length === 0, `E2E 3 demo-005 «يمكن، ما ادري»: nurse message ${nurse}, LOW_CONFIDENCE in queue ${low}`, errors);
   await context.close();
 }
@@ -313,7 +320,7 @@ const queueRows = async (page) => {
   await page.goto(`${APP_URL}#/patient/demo-001/checkin`, { waitUntil: 'networkidle' });
   await startCheckin(page);
   const q = await page.getByRole('heading', { level: 1 }).innerText();
-  await answerAndConfirm(page, 'ايه بدأ فيها');
+  await answerAndConfirm(page, 'ايه للحين مستمر');
   await page.goto(`${APP_URL}#/clinician/patient/demo-001?tab=audit`, { waitUntil: 'networkidle' });
   const familyAudit = await visible(page.getByText('Family (patient app)'));
   report(q.includes('أبو محمد') && familyAudit && errors.length === 0, `family mode: «${q}», audited as family ${familyAudit}`, errors);

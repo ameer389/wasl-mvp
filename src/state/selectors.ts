@@ -1,9 +1,9 @@
 /** Pure selectors over DemoState (memoised by the store hooks). */
 import { buildCareGraph } from '../domain/careGraph';
-import { evaluate, sortGaps } from '../domain/gapEngine';
+import { evaluate, FEED_SOURCE_FOR, sortGaps, type Evaluation } from '../domain/gapEngine';
 import { planQuestions, type QuestionPlan } from '../domain/questionPlanner';
-import { patientDay } from '../domain/time';
-import type { CareTask, Day, Evidence, Gap, GapResolution, Patient, TaskStatus } from '../domain/types';
+import { FOLLOW_UP_DAYS, NO_RESPONSE_GRACE_DAYS, patientDay } from '../domain/time';
+import type { AuditEntry, CareTask, Day, Evidence, Gap, GapResolution, Patient, TaskStatus } from '../domain/types';
 
 export function buildAllTasks(patients: readonly Patient[]): Record<string, CareTask[]> {
   return Object.fromEntries(patients.map((p) => [p.id, buildCareGraph(p)]));
@@ -14,11 +14,21 @@ export function dayFor(patient: Patient, globalDay: Day): Day {
   return patientDay(globalDay, patient.dischargeDay ?? 0);
 }
 
+/** Keep the standard follow-up window and include the first overdue evaluation for each task. */
+export function patientHorizon(tasks: readonly CareTask[]): Day {
+  return tasks.reduce((last, task) => Math.max(last, task.deadlineDay + (FEED_SOURCE_FOR[task.type] ? 1 : NO_RESPONSE_GRACE_DAYS)), FOLLOW_UP_DAYS);
+}
+
+export function simulationHorizon(patients: readonly Patient[], tasksByPatient = buildAllTasks(patients)): Day {
+  return patients.reduce((last, p) => Math.max(last, (p.dischargeDay ?? 0) + patientHorizon(tasksByPatient[p.id] ?? [])), FOLLOW_UP_DAYS);
+}
+
 export interface AllEvaluation {
   statuses: Record<string, TaskStatus>;
   /** All open gaps across discharged patients, sorted by priority. */
   gaps: Gap[];
   gapsByPatient: Record<string, Gap[]>;
+  byPatient: Record<string, Evaluation>;
 }
 
 /**
@@ -31,20 +41,23 @@ export function evaluateAll(
   evidence: readonly Evidence[],
   resolutions: readonly GapResolution[],
   globalDay: Day,
+  audit: readonly AuditEntry[] = [],
 ): AllEvaluation {
   const statuses: Record<string, TaskStatus> = {};
   const gapsByPatient: Record<string, Gap[]> = {};
+  const byPatient: Record<string, Evaluation> = {};
   for (const p of patients) {
     const today = dayFor(p, globalDay);
     if (today < 0) {
       gapsByPatient[p.id] = [];
       continue;
     }
-    const result = evaluate(p, tasksByPatient[p.id] ?? [], evidence, resolutions, today);
+    const result = evaluate(p, tasksByPatient[p.id] ?? [], evidence, resolutions, today, audit);
+    byPatient[p.id] = result;
     Object.assign(statuses, result.taskStatus);
     gapsByPatient[p.id] = result.gaps;
   }
-  return { statuses, gaps: sortGaps(Object.values(gapsByPatient).flat()), gapsByPatient };
+  return { statuses, gaps: sortGaps(Object.values(gapsByPatient).flat()), gapsByPatient, byPatient };
 }
 
 /** Today's adaptive and baseline questions per discharged patient. */
@@ -52,18 +65,20 @@ export function planAll(
   patients: readonly Patient[],
   tasksByPatient: Readonly<Record<string, CareTask[]>>,
   evidence: readonly Evidence[],
-  statuses: Readonly<Record<string, TaskStatus>>,
+  evaluation: AllEvaluation,
   globalDay: Day,
+  audit: readonly AuditEntry[] = [],
 ): Record<string, QuestionPlan> {
   const plans: Record<string, QuestionPlan> = {};
   for (const p of patients) {
     const today = dayFor(p, globalDay);
-    if (today >= 0) plans[p.id] = planQuestions(p, tasksByPatient[p.id] ?? [], evidence, statuses, today);
+    const result = evaluation.byPatient[p.id];
+    if (today >= 0 && result) plans[p.id] = planQuestions(p, tasksByPatient[p.id] ?? [], evidence, result, today, audit);
   }
   return plans;
 }
 
-/** Every gap detected for a patient so far, open or resolved (for audit history). */
+/** Current raw conditions for audit reconstruction when no observation was recorded. */
 export function detectedGaps(
   patient: Patient,
   tasks: readonly CareTask[],

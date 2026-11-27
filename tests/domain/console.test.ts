@@ -34,8 +34,8 @@ describe('plain-English gap labels', () => {
       expect(GAP_TYPE_LABEL[t]).toBeTruthy();
       expect(GAP_TYPE_LABEL[t]).not.toMatch(PROHIBITED);
     }
-    expect(GAP_TYPE_LABEL.STOPPED_STILL_TAKEN).toBe('Stopped medicine still being taken');
-    expect(GAP_TYPE_LABEL.LOW_CONFIDENCE).toBe('Low-confidence answer: needs a human');
+    expect(GAP_TYPE_LABEL.STOPPED_STILL_TAKEN).toBe('Stopped medicine reported in use');
+    expect(GAP_TYPE_LABEL.LOW_CONFIDENCE).toBe('Evidence needs clarification');
   });
 
   it('name the subject of a gap (task, medicine or unknown)', () => {
@@ -53,7 +53,7 @@ describe('claim options per task type', () => {
   it('offers only claims the gap engine understands, matching the task', () => {
     expect(claimOptionsFor('MED_START').map((o) => o.claim)).toEqual(['DONE', 'NOT_DONE']);
     expect(claimOptionsFor('MED_STOP').map((o) => o.label)).toEqual(['Stopped', 'Still taking']);
-    expect(claimOptionsFor('MED_DOSE_CHANGE').map((o) => o.claim)).toEqual(['DONE', 'OLD_DOSE']);
+    expect(claimOptionsFor('MED_DOSE_CHANGE').map((o) => o.claim)).toEqual(['DONE', 'OLD_DOSE', 'NOT_DONE']);
   });
 
   it('feed-verified tasks have no clinician claims, with an explanation', () => {
@@ -116,7 +116,8 @@ describe('queue grouping and filters', () => {
 describe('metrics', () => {
   const s = seedState();
   const tasks = buildAllTasks(s.patients);
-  const { statuses, gaps } = evaluateAll(s.patients, tasks, s.evidence, s.resolutions, 4);
+  const evaluation = evaluateAll(s.patients, tasks, s.evidence, s.resolutions, 4);
+  const { statuses, gaps } = evaluation;
 
   it('verification counts only tasks due so far', () => {
     const v = verificationSummary(tasks['demo-006']!, statuses, 4);
@@ -126,7 +127,7 @@ describe('metrics', () => {
   });
 
   it('question savings: adaptive vs full script across patients', () => {
-    const savings = questionSavings(Object.values(planAll(s.patients, tasks, s.evidence, statuses, 4)));
+    const savings = questionSavings(Object.values(planAll(s.patients, tasks, s.evidence, evaluation, 4)));
     expect(savings.adaptive).toBeLessThan(savings.baseline);
     expect(savings.reductionPct).toBe(Math.round((100 * (savings.baseline - savings.adaptive)) / savings.baseline));
     expect(questionSavings([])).toEqual({ adaptive: 0, baseline: 0, reductionPct: 0 });
@@ -158,7 +159,9 @@ describe('care graph layout', () => {
     const day3Meds = layout.nodes.filter((n) => n.lane === 'Medications' && n.task.deadlineDay === 3);
     expect(day3Meds.map((n) => n.row).sort()).toEqual([0, 1, 2]);
     const attend = tasks.find((t) => t.type === 'FOLLOWUP_ATTENDED')!;
-    expect(layout.edges.filter((e) => e.to === attend.id)).toHaveLength(2); // booking + CBC
+    expect(layout.edges.filter((e) => e.to === attend.id)).toEqual([
+      expect.objectContaining({ from: tasks.find((t) => t.type === 'FOLLOWUP_BOOKED')?.id }),
+    ]);
     expect(layout.width).toBe(m.laneLabelWidth + 15 * m.dayWidth + 8); // Day 0–14
     expect(layout.dayCenter(4)).toBe(m.laneLabelWidth + 4.5 * m.dayWidth);
   });
@@ -208,6 +211,35 @@ describe('new discharge form', () => {
     expect(() => buildCareGraph(p)).not.toThrow();
   });
 
+  it('rejects an orphaned lab link and omits it from the lenient preview', () => {
+    const f = sampleForm();
+    const removed = f.meds.shift()!;
+    f.labs[0]!.linkedDrugId = removed.drugId;
+    expect(validatePlanForm(f)['labs.0.linkedDrugId']).toBeDefined();
+    expect(formToPatient(f, 'preview', 0, true).plan.labs[0]?.linkedDrugId).toBeUndefined();
+  });
+
+  it('accepts Day 30, preserves written medication text and rejects invalid treatment days', () => {
+    const f = sampleForm();
+    f.labs[0]!.dueDay = '30';
+    f.followUps[0]!.visitDay = '30';
+    f.meds[0]!.dose = ' 75 mg ';
+    f.meds[0]!.frequency = ' once daily ';
+    f.meds[0]!.treatmentEndDay = '5';
+    expect(validatePlanForm(f)).toEqual({});
+    expect(formToPatient(f, 'p').plan.meds[0]).toMatchObject({ dose: ' 75 mg ', frequency: ' once daily ', treatmentEndDay: 5 });
+    for (const value of ['-1', '31', '2.5', 'NaN', 'Infinity']) {
+      f.meds[0]!.treatmentEndDay = value;
+      expect(validatePlanForm(f)['meds.0.treatmentEndDay']).toBeDefined();
+    }
+  });
+
+  it('rejects a new medication ending before its existing Day 1 start check', () => {
+    const f = sampleForm();
+    f.meds[0]!.treatmentEndDay = '0';
+    expect(validatePlanForm(f)['meds.0.treatmentEndDay']).toBeDefined();
+  });
+
   it('allocates the next free patient id', () => {
     expect(nextPatientId([{ id: 'demo-001' }, { id: 'pt-002' }])).toBe('pt-003');
     expect(nextPatientId([{ id: 'pt-002' }, { id: 'x' }])).toBe('pt-003');
@@ -228,8 +260,13 @@ describe('per-patient timelines (patient added mid-demo)', () => {
   });
 
   it('resolutions are stored on the patient timeline', () => {
-    const s = demoReducer(seedState(), { type: 'RESOLVE_GAP', gapId: 'pt-007:X:y', action: 'RESOLVED', by: 'Dr', at: 't', patientDay: 1 });
-    expect(s.resolutions[0]?.day).toBe(1);
+    const p = formToPatient(sampleForm(), 'pt-007', 4);
+    let s = demoReducer(seedState(), { type: 'ADD_PATIENT', patient: p, by: 'Dr', at: 't' });
+    s = demoReducer(s, { type: 'SET_DAY', day: 7 });
+    const gap = evaluateAll(s.patients, buildAllTasks(s.patients), s.evidence, s.resolutions, s.simulatedDay, s.audit).gapsByPatient[p.id]![0]!;
+    s = demoReducer(s, { type: 'RESOLVE_GAP', gapId: gap.id, action: 'RESOLVED', by: 'Dr', at: 't',
+      disposition: 'ADMINISTRATIVE', reasonCode: 'HANDED_OFF', note: 'Handed off' });
+    expect(s.resolutions[0]?.day).toBe(3);
     expect(s.audit.at(-1)?.day).toBe(s.simulatedDay); // the audit keeps global time
   });
 });
@@ -253,7 +290,8 @@ describe('audit trail', () => {
   it('merges stored entries with engine-detected gaps, newest first, and classifies them', () => {
     let state = s;
     const gapId = `demo-001:STOPPED_STILL_TAKEN:${taskId('demo-001', 'MED_STOP', 'clopidogrel', 1)}`;
-    state = demoReducer(state, { type: 'RESOLVE_GAP', gapId, action: 'CALLED', by: 'Dr Test', note: 'Reached', at: '2026-11-13T08:00:00.000Z' });
+    state = demoReducer(state, { type: 'RESOLVE_GAP', gapId, action: 'CALLED', contactOutcome: 'reached',
+      by: 'Dr Test', note: 'Reached', at: '2026-11-13T08:00:00.000Z' });
     const rows = patientAuditTrail({
       patient: p,
       tasks,
@@ -262,7 +300,7 @@ describe('audit trail', () => {
       globalDay: 4,
     });
     expect(rows[0]).toMatchObject({ action: 'Call logged', kind: 'clinician', actor: 'Dr Test' });
-    expect(rows[0]?.target).toBe('Stopped medicine still being taken · Stop Clopidogrel');
+    expect(rows[0]?.target).toBe('Stopped medicine reported in use · Stop Clopidogrel');
     expect(rows.some((r) => r.action === 'Gap detected' && r.kind === 'system')).toBe(true);
     expect(rows.at(-1)?.action).toBe('Discharge plan received');
     for (let i = 1; i < rows.length; i++) expect(rows[i - 1]!.day).toBeGreaterThanOrEqual(rows[i]!.day);

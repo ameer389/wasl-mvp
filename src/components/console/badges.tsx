@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Check } from 'lucide-react';
+import { ArrowRightLeft } from 'lucide-react';
 import { RISK_LABEL, TASK_STATUS_LABEL } from '../../domain/labels';
 import type { Patient, Risk, TaskStatus } from '../../domain/types';
 import { Badge, type BadgeVariant } from '../ui';
@@ -18,7 +18,9 @@ export function StatusBadge({ status, risk }: { status: TaskStatus; risk: Risk }
   const variant: BadgeVariant =
     status === 'VERIFIED' ? 'verified' : status === 'GAP' || status === 'ESCALATED' ? (risk === 'high' ? 'high' : 'medium') : 'neutral';
   return (
-    <Badge variant={variant} dot={status !== 'CLOSED'} icon={status === 'CLOSED' ? <Check size={11} aria-hidden="true" /> : undefined}>
+    <Badge variant={variant} dot={status !== 'CLOSED'} title={status === 'VERIFIED'
+      ? 'Sufficient evidence under the demo policy'
+      : status === 'CLOSED' ? 'Gap closed administratively' : undefined}>
       {TASK_STATUS_LABEL[status]}
     </Badge>
   );

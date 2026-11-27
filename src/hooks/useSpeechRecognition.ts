@@ -6,12 +6,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VoiceError } from '../domain/checkin';
+import { recognitionConfidence, type SpeechAlternative } from '../domain/speechAnswer';
 
 // Minimal typings (the API is not in every TS DOM lib).
-interface SpeechAlternative {
-  transcript: string;
-  confidence: number;
-}
 interface SpeechResult {
   readonly isFinal: boolean;
   readonly length: number;
@@ -38,12 +35,6 @@ interface Recognizer {
 }
 type RecognizerCtor = new () => Recognizer;
 
-export interface Alternative {
-  transcript: string;
-  /** Recogniser confidence 0..1; undefined when the browser reports 0 (unknown). */
-  confidence?: number;
-}
-
 function getCtor(): RecognizerCtor | undefined {
   if (typeof window === 'undefined') return undefined;
   const w = window as unknown as { SpeechRecognition?: RecognizerCtor; webkitSpeechRecognition?: RecognizerCtor };
@@ -64,7 +55,7 @@ const ERROR_MAP: Record<string, VoiceError> = {
 
 interface Callbacks {
   onInterim: (text: string) => void;
-  onFinal: (alternatives: Alternative[]) => void;
+  onFinal: (alternatives: SpeechAlternative[]) => void;
   onError: (error: VoiceError) => void;
 }
 
@@ -74,10 +65,40 @@ export function useSpeechRecognition(callbacks: Callbacks, lang = 'ar-SA') {
     cb.current = callbacks;
   });
   const rec = useRef<Recognizer | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [listening, setListening] = useState(false);
   const supported = speechSupported();
 
-  const stop = useCallback(() => rec.current?.stop(), []);
+  const dispose = useCallback((abort: boolean) => {
+    clearTimeout(timer.current);
+    const active = rec.current;
+    rec.current = null;
+    if (!active) return;
+    active.onend = active.onerror = active.onresult = null;
+    if (abort) {
+      try { active.abort(); } catch { /* Already stopped. */ }
+    }
+  }, []);
+
+  const cancel = useCallback(() => {
+    dispose(true);
+    setListening(false);
+  }, [dispose]);
+
+  const stop = useCallback(() => {
+    const active = rec.current;
+    if (!active) return;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      if (rec.current !== active) return;
+      cancel();
+      cb.current.onError('no_speech');
+    }, 3000);
+    try { active.stop(); } catch {
+      cancel();
+      cb.current.onError('unknown');
+    }
+  }, [cancel]);
 
   const start = useCallback(() => {
     const Ctor = getCtor();
@@ -85,53 +106,63 @@ export function useSpeechRecognition(callbacks: Callbacks, lang = 'ar-SA') {
       cb.current.onError('unsupported');
       return;
     }
-    rec.current?.abort();
-    const r = new Ctor();
+    dispose(true);
+    let r: Recognizer;
+    try { r = new Ctor(); } catch {
+      setListening(false);
+      cb.current.onError('unknown');
+      return;
+    }
     r.lang = lang;
     r.interimResults = true;
     r.maxAlternatives = 3;
     r.continuous = false;
-    let finished = false;
+    const finish = (error?: VoiceError, alternatives?: SpeechAlternative[]) => {
+      if (rec.current !== r) return;
+      dispose(true);
+      setListening(false);
+      if (error) cb.current.onError(error);
+      else if (alternatives?.length) cb.current.onFinal(alternatives);
+    };
 
     r.onresult = (e) => {
+      if (rec.current !== r) return;
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
         if (!res) continue;
         if (res.isFinal) {
-          finished = true;
-          const alts: Alternative[] = [];
+          const alts: SpeechAlternative[] = [];
           for (let k = 0; k < res.length; k++) {
             const a = res[k];
-            if (a?.transcript.trim()) alts.push({ transcript: a.transcript, ...(a.confidence > 0 ? { confidence: a.confidence } : {}) });
+            if (a?.transcript.trim()) alts.push({ transcript: a.transcript, confidence: recognitionConfidence(a.confidence) });
           }
-          cb.current.onFinal(alts);
+          finish(alts.length ? undefined : 'no_speech', alts);
+          return;
         } else {
           interim += res[0]?.transcript ?? '';
         }
       }
-      if (interim && !finished) cb.current.onInterim(interim);
+      if (interim) cb.current.onInterim(interim);
     };
     r.onerror = (e) => {
-      if (e.error === 'aborted') return;
-      finished = true;
-      cb.current.onError(ERROR_MAP[e.error] ?? 'unknown');
+      finish(ERROR_MAP[e.error] ?? 'unknown');
     };
     r.onend = () => {
-      setListening(false);
-      if (!finished) cb.current.onError('no_speech');
+      finish('no_speech');
     };
 
     rec.current = r;
+    setListening(true);
+    timer.current = setTimeout(() => finish('no_speech'), 20000);
     try {
       r.start();
-      setListening(true);
     } catch {
-      cb.current.onError('unknown');
+      finish('unknown');
     }
-  }, [lang]);
+  }, [dispose, lang]);
 
-  useEffect(() => () => rec.current?.abort(), []);
+  useEffect(() => () => dispose(true), [dispose]);
 
-  return { supported, listening, start, stop };
+  return { supported, listening, start, stop, cancel };
 }

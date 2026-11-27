@@ -10,7 +10,7 @@ export const GLOSSARY = {
   },
   route: {
     term: 'Route',
-    text: 'Who should act and how fast. Now: a clinician today (high risk). Within 24h: a clinician by tomorrow. Patient reminder: low risk, handled in the patient app.',
+    text: 'Simulated routing. Now is for high-risk items. Within 24h is for clinician review. In-app follow-up uses eligible patient check-in questions.',
   },
   confidence: {
     term: 'Confidence',
@@ -38,5 +38,5 @@ export const PAGE_INTRO: Record<string, string> = {
   '/about': 'The idea in one page: expected care, what happens at home, and the gaps in between.',
 };
 
-export const DAY_HINT = 'Simulated day = days since discharge. Move forward to watch WASL catch what goes wrong at home.';
+export const DAY_HINT = 'Each patient starts on their own Day 0. The clock can advance past a deadline to check for overdue gaps.';
 export const TODAY_INTRO_AR = 'كل يوم نسألك كم سؤال قصير عن أدويتك ومواعيدك. جاوب بصوتك أو بالأزرار، والفريق الطبي يتابع اللي يحتاج متابعة.';

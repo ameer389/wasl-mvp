@@ -1,6 +1,6 @@
 import { CalendarCheck, Database, Mic, ShieldCheck, Smartphone, Stethoscope, TestTube, Users, type LucideIcon } from 'lucide-react';
-import { SOURCE_LABEL } from '../../domain/gapEngine';
-import { CLAIM_LABEL } from '../../domain/labels';
+import { SOURCE_LABEL, VERIFY_THRESHOLD } from '../../domain/gapEngine';
+import { evidenceClaimLabel } from '../../domain/labels';
 import type { Evidence, EvidenceSource } from '../../domain/types';
 import { cn } from '../../lib/cn';
 
@@ -32,24 +32,24 @@ const pct = (c: number) => `${Math.round(c * 100)}%`;
 
 /** Compact evidence chip: source icon, day, confidence, raw text. */
 export function EvidenceChip({ evidence }: { evidence: Evidence }) {
-  const low = evidence.confidence < 0.7;
+  const low = evidence.confidence < VERIFY_THRESHOLD || evidence.claim === 'UNSURE';
   return (
     <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg border border-line bg-bg/60 px-2 py-1 text-xs">
       <SourceIcon source={evidence.source} size={13} className="text-muted" />
       <span className="text-muted tabular-nums">Day {evidence.day}</span>
-      <span className="text-ink-2">{CLAIM_LABEL[evidence.claim]}</span>
+      <span className="text-ink-2">{evidenceClaimLabel(evidence)}</span>
       <span className={cn('tabular-nums', low ? 'text-medium' : 'text-muted')} title="Understanding confidence">
         {pct(evidence.confidence)}
       </span>
-      {evidence.confirmedByHuman && <ShieldCheck size={13} aria-label="Confirmed by a person" className="text-success" />}
+      {evidence.source === 'clinician' && evidence.confirmedByHuman && <ShieldCheck size={13} aria-label="Confirmed by clinician" className="text-success" />}
       {evidence.rawText && <ArabicQuote text={evidence.rawText} className="min-w-0 truncate" />}
     </span>
   );
 }
 
 /** Full evidence row with provenance (drawer, right column). */
-export function EvidenceItem({ evidence }: { evidence: Evidence }) {
-  const low = evidence.confidence < 0.7;
+export function EvidenceItem({ evidence, effective }: { evidence: Evidence; effective?: boolean }) {
+  const low = evidence.confidence < VERIFY_THRESHOLD || evidence.claim === 'UNSURE';
   return (
     <li className="flex gap-3 rounded-lg border border-line bg-bg/40 p-3" title={`Record ${evidence.id}`}>
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-muted">
@@ -59,9 +59,10 @@ export function EvidenceItem({ evidence }: { evidence: Evidence }) {
         <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
           <span className="font-medium text-ink">{SOURCE_LABEL[evidence.source]}</span>
           <span className="text-muted tabular-nums">Day {evidence.day}</span>
-          <span className="text-ink-2">{CLAIM_LABEL[evidence.claim]}</span>
+          <span className="text-ink-2">{evidenceClaimLabel(evidence)}</span>
           <span className={cn('tabular-nums', low ? 'text-medium' : 'text-muted')}>confidence {pct(evidence.confidence)}</span>
-          {evidence.confirmedByHuman && <span className="text-success">confirmed by a person</span>}
+          {evidence.source === 'clinician' && evidence.confirmedByHuman && <span className="text-success">confirmed by clinician</span>}
+          {effective && <span className="text-muted">Effective report</span>}
         </div>
         {evidence.rawText && <ArabicQuote text={evidence.rawText} className="block text-sm" />}
         {evidence.detail && <p className="text-xs text-muted">{evidence.detail}</p>}

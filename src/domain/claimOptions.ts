@@ -22,6 +22,7 @@ const OPTIONS: Record<TaskType, ClaimOption[]> = {
   MED_DOSE_CHANGE: [
     { claim: 'DONE', label: 'On the new dose' },
     { claim: 'OLD_DOSE', label: 'Still on the previous dose' },
+    { claim: 'NOT_DONE', label: 'New dose not in use, actual dose unspecified' },
   ],
   MED_STOP: [
     { claim: 'STOPPED', label: 'Stopped' },
@@ -47,5 +48,5 @@ export function confirmationHint(type: TaskType): string | undefined {
   const feed = FEED_SOURCE_FOR[type];
   if (!feed) return undefined;
   const system = feed === 'lab_system' ? 'lab system' : 'appointment system';
-  return `Verified by the ${system} feed. Check the record, then mark the gap resolved with a note.`;
+  return `Verification requires the ${system} feed. An administrative disposition leaves task verification unchanged.`;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCareGraph } from '../../src/domain/careGraph';
+import { buildCareGraph, dependencyKind, hasValidTaskDependencies } from '../../src/domain/careGraph';
 import { findDuplicates, getDrug, DRUGS } from '../../src/domain/drugs';
 import { makePatient, T, tasksOfType } from './fixtures';
 
@@ -50,9 +50,41 @@ describe('buildCareGraph', () => {
     expect(byId(T.wound)).toMatchObject({ deadlineDay: 3, risk: 'medium' });
   });
 
-  it('attendance depends on booking and on labs due before the visit', () => {
-    expect(byId(T.attended).dependsOn).toEqual([T.booked, T.cbc]);
+  it('links attendance to booking for context and prioritizes start before continuation questions', () => {
+    expect(byId(T.attended).dependsOn).toEqual([T.booked]);
     expect(byId(T.apixabanCont3).dependsOn).toEqual([T.apixabanStart]);
+    expect(dependencyKind(byId(T.booked), byId(T.attended))).toBe('information');
+    expect(dependencyKind(byId(T.apixabanStart), byId(T.apixabanCont3))).toBe('question_priority');
+  });
+
+  it('rejects missing, foreign, duplicate, self-referencing and cyclic task links', () => {
+    const start = byId(T.apixabanStart);
+    const continuation = byId(T.apixabanCont3);
+    expect(hasValidTaskDependencies(start.patientId, tasks)).toBe(true);
+    expect(hasValidTaskDependencies(start.patientId, [continuation])).toBe(false);
+    expect(hasValidTaskDependencies(start.patientId, [continuation, { ...start, patientId: 'other' }])).toBe(false);
+    expect(hasValidTaskDependencies(start.patientId, [start, start])).toBe(false);
+    expect(hasValidTaskDependencies(start.patientId, [{ ...start, dependsOn: [start.id] }])).toBe(false);
+    expect(hasValidTaskDependencies(start.patientId, [{ ...start, dependsOn: [continuation.id] }, continuation])).toBe(false);
+  });
+
+  it.each([[1, [1]], [2, [1]], [3, [1, 3]], [5, [1, 3]], [7, [1, 3, 7]], [30, [1, 3, 7]]] as const)(
+    'limits NEW continuation to the inclusive treatment end Day %i',
+    (end, deadlines) => {
+      const patient = makePatient();
+      patient.plan.meds[0]!.treatmentEndDay = end;
+      const actual = buildCareGraph(patient).filter((t) => t.refId === 'apixaban');
+      expect(actual.map((t) => t.deadlineDay)).toEqual(deadlines);
+      expect(actual.map((t) => t.id)).toEqual(tasks.filter((t) => t.refId === 'apixaban' && deadlines.some((day) => day === t.deadlineDay)).map((t) => t.id));
+      expect(actual.some((t) => t.type === 'MED_STOP')).toBe(false);
+    },
+  );
+
+  it('bounds existing continuation without changing STOP or CHANGED tasks', () => {
+    const patient = makePatient();
+    patient.plan.meds.find((m) => m.action === 'CONTINUE')!.treatmentEndDay = 2;
+    const actual = buildCareGraph(patient);
+    expect(actual).toEqual(tasks.filter((t) => t.id !== T.metforminCont));
   });
 
   it('is deterministic with unique ids', () => {

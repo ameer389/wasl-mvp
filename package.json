@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "voice:broker": "node --env-file-if-exists=.env.humain.local scripts/humain-broker.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -16,6 +17,8 @@
     "eval:external": "tsx scripts/eval-external.ts"
   },
   "dependencies": {
+    "@humain-voice/agent": "0.20.0",
+    "livekit-client": "2.25.0",
     "lucide-react": "^1.72.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

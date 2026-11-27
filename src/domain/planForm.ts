@@ -3,6 +3,8 @@
  * Doses are copied from the plan as written — WASL never suggests or changes doses.
  */
 import { getDrug } from './drugs';
+import { MED_DEADLINES } from './careGraph';
+import { isDay, MAX_PLAN_DAY } from './time';
 import type { Day, MedAction, Patient } from './types';
 
 export interface MedRow {
@@ -13,6 +15,7 @@ export interface MedRow {
   frequency: string;
   prescriber: string;
   previousDose: string;
+  treatmentEndDay?: string;
 }
 export interface LabRow {
   key: string;
@@ -108,7 +111,8 @@ export function sampleForm(): PlanForm {
 
 export type FormErrors = Record<string, string>;
 
-const isDay = (v: string) => /^\d{1,2}$/.test(v.trim()) && Number(v) <= 30;
+const isPlanDay = (v: string) => /^\d{1,2}$/.test(v.trim()) && isDay(Number(v), MAX_PLAN_DAY);
+const planDayError = `Day 0–${MAX_PLAN_DAY}`;
 const blank = (v: string) => v.trim() === '';
 
 /** Field-path → message. Empty object means valid. */
@@ -135,29 +139,41 @@ export function validatePlanForm(f: PlanForm): FormErrors {
     if (blank(m.frequency)) e[`${p}.frequency`] = 'Required';
     if (blank(m.prescriber)) e[`${p}.prescriber`] = 'Required';
     if (m.action === 'CHANGED' && blank(m.previousDose)) e[`${p}.previousDose`] = 'Required when the dose changed';
+    if ((m.action === 'NEW' || m.action === 'CONTINUE') && m.treatmentEndDay?.trim() && !isPlanDay(m.treatmentEndDay)) {
+      e[`${p}.treatmentEndDay`] = planDayError;
+    } else if (m.action === 'NEW' && m.treatmentEndDay?.trim() && Number(m.treatmentEndDay) < MED_DEADLINES.start) {
+      e[`${p}.treatmentEndDay`] = `Day ${MED_DEADLINES.start}–${MAX_PLAN_DAY} for a new medicine`;
+    }
   });
 
   f.labs.forEach((l, i) => {
     if (blank(l.test)) e[`labs.${i}.test`] = 'Required';
-    if (!isDay(l.dueDay)) e[`labs.${i}.dueDay`] = 'Day 0–30';
+    if (!isPlanDay(l.dueDay)) e[`labs.${i}.dueDay`] = planDayError;
+    if (l.linkedDrugId && (!getDrug(l.linkedDrugId) || !seen.has(l.linkedDrugId))) {
+      e[`labs.${i}.linkedDrugId`] = 'Choose a medicine still in the plan';
+    }
   });
 
   f.followUps.forEach((fu, i) => {
     const p = `followUps.${i}`;
     if (blank(fu.clinic)) e[`${p}.clinic`] = 'Required';
-    if (!isDay(fu.bookByDay)) e[`${p}.bookByDay`] = 'Day 0–30';
-    if (!isDay(fu.visitDay)) e[`${p}.visitDay`] = 'Day 0–30';
-    else if (isDay(fu.bookByDay) && Number(fu.visitDay) < Number(fu.bookByDay)) {
+    if (!isPlanDay(fu.bookByDay)) e[`${p}.bookByDay`] = planDayError;
+    if (!isPlanDay(fu.visitDay)) e[`${p}.visitDay`] = planDayError;
+    else if (isPlanDay(fu.bookByDay) && Number(fu.visitDay) < Number(fu.bookByDay)) {
       e[`${p}.visitDay`] = 'Visit cannot be before the book-by day';
     }
   });
 
   if (f.woundEnabled) {
     if (blank(f.woundInstructions)) e.woundInstructions = 'Required';
-    if (!isDay(f.woundCheckDay)) e.woundCheckDay = 'Day 0–30';
+    if (!isPlanDay(f.woundCheckDay)) e.woundCheckDay = planDayError;
   }
 
   if (f.meds.length === 0 && f.labs.length === 0) e.plan = 'Add at least one medicine or lab';
+  else if (!f.labs.length && f.meds.every((m) =>
+    m.action === 'CONTINUE' && m.treatmentEndDay !== undefined && isPlanDay(m.treatmentEndDay) &&
+    Number(m.treatmentEndDay) < MED_DEADLINES.continueExisting
+  )) e.plan = 'Add at least one medicine or lab with a follow-up task';
   return e;
 }
 
@@ -170,26 +186,29 @@ export function formToPatient(f: PlanForm, id: string, dischargeDay: Day = 0, le
   const seen = new Set<string>();
   const meds = keep(f.meds, (m) => !!getDrug(m.drugId) && !seen.has(m.drugId) && (seen.add(m.drugId), true)).map((m) => ({
     drugId: m.drugId,
-    dose: m.dose.trim(),
-    frequency: m.frequency.trim(),
+    dose: m.dose,
+    frequency: m.frequency,
     action: m.action,
     prescriber: m.prescriber.trim(),
     ...(m.action === 'CHANGED' && m.previousDose.trim() ? { previousDose: m.previousDose.trim() } : {}),
+    ...((m.action === 'NEW' || m.action === 'CONTINUE') && m.treatmentEndDay && isPlanDay(m.treatmentEndDay)
+      ? { treatmentEndDay: Number(m.treatmentEndDay) }
+      : {}),
   }));
-  const labs = keep(f.labs, (l) => !blank(l.test) && isDay(l.dueDay)).map((l, i) => ({
+  const labs = keep(f.labs, (l) => !blank(l.test) && isPlanDay(l.dueDay)).map((l, i) => ({
     id: `lab-${i + 1}`,
     test: l.test.trim(),
     dueDay: Number(l.dueDay),
-    ...(l.linkedDrugId && getDrug(l.linkedDrugId) ? { linkedDrugId: l.linkedDrugId } : {}),
+    ...(l.linkedDrugId && (!lenient || meds.some((m) => m.drugId === l.linkedDrugId)) ? { linkedDrugId: l.linkedDrugId } : {}),
   }));
-  const followUps = keep(f.followUps, (fu) => !blank(fu.clinic) && isDay(fu.bookByDay) && isDay(fu.visitDay)).map((fu, i) => ({
+  const followUps = keep(f.followUps, (fu) => !blank(fu.clinic) && isPlanDay(fu.bookByDay) && isPlanDay(fu.visitDay) && Number(fu.bookByDay) <= Number(fu.visitDay)).map((fu, i) => ({
     id: `fu-${i + 1}`,
     clinic: fu.clinic.trim(),
     bookByDay: Number(fu.bookByDay),
     visitDay: Number(fu.visitDay),
   }));
   const wound =
-    f.woundEnabled && (!lenient || (!blank(f.woundInstructions) && isDay(f.woundCheckDay)))
+    f.woundEnabled && (!lenient || (!blank(f.woundInstructions) && isPlanDay(f.woundCheckDay)))
       ? { woundCare: { instructions: f.woundInstructions.trim(), checkDay: Number(f.woundCheckDay) } }
       : {};
   const transfer =

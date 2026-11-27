@@ -101,10 +101,12 @@ export function echoAr(kind: QuestionKind, intent: AnswerIntent, med: string | u
     case 'MED_CONTINUE':
       return intent === 'YES' ? `${who}للحين ${pick(s, 'مستمر', 'مستمرة')} على ${m}` : `${who}مو ${pick(s, 'مستمر', 'مستمرة')} على ${m}`;
     case 'STOPPED_CHECK':
+      if (intent === 'NEVER_STARTED') return `${who}ما ${v('بديت', 'بديتي', 'بدأ', 'بدأت')} ${m} من الأساس`;
       return intent === 'STOPPED' || intent === 'YES'
         ? `${who}${v('وقّفت', 'وقّفتي', 'وقّف', 'وقّفت')} ${m}`
         : `${who}للحين ${v('تاخذ', 'تاخذين', 'ياخذ', 'تاخذ')} ${m}`;
     case 'DOSE_CHECK':
+      if (intent === 'NO') return `${who}مو على الجرعة الجديدة`;
       return intent === 'NEW_DOSE' || intent === 'YES'
         ? `${who}${v('تاخذ', 'تاخذين', 'ياخذ', 'تاخذ')} ${m} على الجرعة الجديدة`
         : `${who}للحين على الجرعة القديمة`;

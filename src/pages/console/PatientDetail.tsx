@@ -9,7 +9,8 @@ import { OverviewTab } from '../../components/console/patient/OverviewTab';
 import type { PatientView } from '../../components/console/patient/types';
 import { Badge, Card, EmptyState, ProgressBar, Tabs, buttonClasses } from '../../components/ui';
 import { verificationSummary } from '../../domain/metrics';
-import { FOLLOW_UP_DAYS } from '../../domain/time';
+import { evaluate } from '../../domain/gapEngine';
+import { patientHorizon } from '../../state/selectors';
 import { ROUTES } from '../../routes';
 import { useDemoStore, usePatient } from '../../state/store';
 
@@ -19,20 +20,25 @@ export default function PatientDetail() {
   const { id = '' } = useParams<{ id: string }>();
   const [params, setParams] = useSearchParams();
   const patient = usePatient(id);
-  const { state, evaluation, tasksByPatient, patientToday } = useDemoStore();
+  const { evaluation, tasksByPatient, patientToday } = useDemoStore();
 
   const view = useMemo<PatientView | undefined>(() => {
     if (!patient) return undefined;
     const today = patientToday(patient.id);
+    const tasks = tasksByPatient[patient.id] ?? [];
+    const result = evaluation.byPatient[patient.id] ?? evaluate(patient, [], [], [], today);
+    const { medication, assessments } = result;
     return {
       patient,
-      tasks: tasksByPatient[patient.id] ?? [],
+      tasks,
       statuses: evaluation.statuses,
-      evidence: state.evidence.filter((e) => e.patientId === patient.id && e.day <= today),
+      evidence: medication.known,
+      medication,
+      assessments,
       gaps: evaluation.gapsByPatient[patient.id] ?? [],
       today,
     };
-  }, [patient, tasksByPatient, evaluation, state.evidence, patientToday]);
+  }, [patient, tasksByPatient, evaluation, patientToday]);
 
   if (!patient || !view) {
     return (
@@ -53,6 +59,7 @@ export default function PatientDetail() {
   const tab = (TAB_IDS as readonly string[]).includes(tabParam ?? '') ? (tabParam as string) : 'overview';
   const highlightGapId = params.get('gap') ?? undefined;
   const verification = verificationSummary(view.tasks, view.statuses, view.today);
+  const lastDay = patientHorizon(view.tasks);
   const initials = patient.nameEn
     .split(/\s+/)
     .map((w) => w[0])
@@ -89,7 +96,7 @@ export default function PatientDetail() {
         </div>
         <div className="flex w-56 flex-col gap-2">
           <Badge variant="neutral" className="self-start tabular-nums">
-            {view.today < 0 ? `Discharges on simulated Day ${patient.dischargeDay}` : `Day ${view.today} of ${FOLLOW_UP_DAYS} after discharge`}
+            {view.today < 0 ? `Discharges on simulated Day ${patient.dischargeDay}` : view.today <= lastDay ? `Day ${view.today} of ${lastDay} after discharge` : `Day ${view.today} after discharge`}
           </Badge>
           <div className="text-xs text-muted">Tasks verified (due so far)</div>
           <ProgressBar value={verification.verified} max={verification.due} label="Tasks verified" />

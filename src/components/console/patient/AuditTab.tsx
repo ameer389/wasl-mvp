@@ -20,10 +20,11 @@ export function AuditTab({ view }: { view: PatientView }) {
         patient,
         tasks,
         audit: state.audit,
+        resolutions: state.resolutions,
         detectedGaps: detectedGaps(patient, tasks, state.evidence, state.simulatedDay),
         globalDay: state.simulatedDay,
       }),
-    [patient, tasks, state.audit, state.evidence, state.simulatedDay],
+    [patient, tasks, state.audit, state.evidence, state.resolutions, state.simulatedDay],
   );
   const shown = filter === 'all' ? rows : rows.filter((r) => r.kind === filter);
 
@@ -71,7 +72,15 @@ export function AuditTab({ view }: { view: PatientView }) {
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-ink">{r.action}</td>
                     <td className="max-w-72 px-4 py-2.5 text-ink-2">{r.target}</td>
-                    <td className="max-w-64 px-4 py-2.5 text-xs text-muted">{r.note ?? '—'}</td>
+                    <td className="max-w-64 px-4 py-2.5 text-xs text-muted">
+                      {r.note ?? '—'}
+                      {r.reasons?.length ? (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer">Recorded reasons</summary>
+                          <ul className="list-disc ps-4">{r.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+                        </details>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

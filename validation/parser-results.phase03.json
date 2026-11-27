@@ -1,0 +1,370 @@
+{
+  "dataset": "validation/utterances.json",
+  "note": "Synthetic dataset; dataset and parser written by the same team. Parser tuned on dev only. Not clinical validation.",
+  "verifyThreshold": 0.7,
+  "counts": {
+    "total": 130,
+    "dev": 52,
+    "test": 78
+  },
+  "dev": {
+    "n": 52,
+    "correct": 52,
+    "accuracy": 100,
+    "hardAccuracy": 100,
+    "hardN": 18,
+    "medExtraction": {
+      "items": 5,
+      "exactMatch": 100,
+      "mismatches": []
+    },
+    "safeFailure": {
+      "wrong": 0,
+      "lowConfidence": 0,
+      "pctOfWrong": null,
+      "unsafe": 0
+    },
+    "byQuestionKind": {
+      "MED_START": {
+        "n": 12,
+        "correct": 12,
+        "accuracy": 100
+      },
+      "MED_CONTINUE": {
+        "n": 10,
+        "correct": 10,
+        "accuracy": 100
+      },
+      "STOPPED_CHECK": {
+        "n": 11,
+        "correct": 11,
+        "accuracy": 100
+      },
+      "DOSE_CHECK": {
+        "n": 9,
+        "correct": 9,
+        "accuracy": 100
+      },
+      "OPEN_MEDS": {
+        "n": 10,
+        "correct": 10,
+        "accuracy": 100
+      }
+    },
+    "perIntent": {
+      "MENTIONS_MEDS": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 5,
+        "predicted": 5
+      },
+      "NEW_DOSE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 3,
+        "predicted": 3
+      },
+      "NO": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 7,
+        "predicted": 7
+      },
+      "NONE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 3,
+        "predicted": 3
+      },
+      "OLD_DOSE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 3,
+        "predicted": 3
+      },
+      "STILL_TAKING": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 4,
+        "predicted": 4
+      },
+      "STOPPED": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 4,
+        "predicted": 4
+      },
+      "UNKNOWN": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 5,
+        "predicted": 5
+      },
+      "UNSURE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 10,
+        "predicted": 10
+      },
+      "YES": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 8,
+        "predicted": 8
+      }
+    },
+    "confusion": {
+      "YES": {
+        "YES": 8
+      },
+      "NO": {
+        "NO": 7
+      },
+      "UNSURE": {
+        "UNSURE": 10
+      },
+      "UNKNOWN": {
+        "UNKNOWN": 5
+      },
+      "STOPPED": {
+        "STOPPED": 4
+      },
+      "STILL_TAKING": {
+        "STILL_TAKING": 4
+      },
+      "NEW_DOSE": {
+        "NEW_DOSE": 3
+      },
+      "OLD_DOSE": {
+        "OLD_DOSE": 3
+      },
+      "NONE": {
+        "NONE": 3
+      },
+      "MENTIONS_MEDS": {
+        "MENTIONS_MEDS": 5
+      }
+    },
+    "wrongItems": []
+  },
+  "test": {
+    "n": 78,
+    "correct": 76,
+    "accuracy": 97.4,
+    "hardAccuracy": 90,
+    "hardN": 20,
+    "medExtraction": {
+      "items": 9,
+      "exactMatch": 55.6,
+      "mismatches": [
+        {
+          "id": "u008",
+          "text": "اي بديت حبة السيوله الصبح",
+          "expected": [],
+          "got": [
+            "apixaban"
+          ]
+        },
+        {
+          "id": "u039",
+          "text": "ايه حبه الضغط ما تركتها",
+          "expected": [],
+          "got": [
+            "bisoprolol"
+          ]
+        },
+        {
+          "id": "u074",
+          "text": "للحين نعطيه حبة السيوله القديمه مع الجديده",
+          "expected": [],
+          "got": [
+            "clopidogrel"
+          ]
+        },
+        {
+          "id": "u125",
+          "text": "اخذ فيفادول للصداع",
+          "expected": [
+            "paracetamol"
+          ],
+          "got": []
+        }
+      ]
+    },
+    "safeFailure": {
+      "wrong": 2,
+      "lowConfidence": 2,
+      "pctOfWrong": 100,
+      "unsafe": 0
+    },
+    "byQuestionKind": {
+      "MED_START": {
+        "n": 17,
+        "correct": 16,
+        "accuracy": 94.1
+      },
+      "MED_CONTINUE": {
+        "n": 17,
+        "correct": 17,
+        "accuracy": 100
+      },
+      "STOPPED_CHECK": {
+        "n": 15,
+        "correct": 15,
+        "accuracy": 100
+      },
+      "DOSE_CHECK": {
+        "n": 13,
+        "correct": 12,
+        "accuracy": 92.3
+      },
+      "OPEN_MEDS": {
+        "n": 16,
+        "correct": 16,
+        "accuracy": 100
+      }
+    },
+    "perIntent": {
+      "MENTIONS_MEDS": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 8,
+        "predicted": 8
+      },
+      "NEW_DOSE": {
+        "precision": 1,
+        "recall": 0.75,
+        "f1": 0.86,
+        "support": 4,
+        "predicted": 3
+      },
+      "NO": {
+        "precision": 1,
+        "recall": 0.9,
+        "f1": 0.95,
+        "support": 10,
+        "predicted": 9
+      },
+      "NONE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 5,
+        "predicted": 5
+      },
+      "OLD_DOSE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 5,
+        "predicted": 5
+      },
+      "STILL_TAKING": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 6,
+        "predicted": 6
+      },
+      "STOPPED": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 6,
+        "predicted": 6
+      },
+      "UNKNOWN": {
+        "precision": 0.8,
+        "recall": 1,
+        "f1": 0.89,
+        "support": 8,
+        "predicted": 10
+      },
+      "UNSURE": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 14,
+        "predicted": 14
+      },
+      "YES": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "support": 12,
+        "predicted": 12
+      }
+    },
+    "confusion": {
+      "YES": {
+        "YES": 12
+      },
+      "NO": {
+        "NO": 9,
+        "UNKNOWN": 1
+      },
+      "UNSURE": {
+        "UNSURE": 14
+      },
+      "UNKNOWN": {
+        "UNKNOWN": 8
+      },
+      "STOPPED": {
+        "STOPPED": 6
+      },
+      "STILL_TAKING": {
+        "STILL_TAKING": 6
+      },
+      "NEW_DOSE": {
+        "NEW_DOSE": 3,
+        "UNKNOWN": 1
+      },
+      "OLD_DOSE": {
+        "OLD_DOSE": 5
+      },
+      "NONE": {
+        "NONE": 5
+      },
+      "MENTIONS_MEDS": {
+        "MENTIONS_MEDS": 8
+      }
+    },
+    "wrongItems": [
+      {
+        "id": "u018",
+        "kind": "MED_START",
+        "text": "والله ما شفت دوا جديد",
+        "expected": "NO",
+        "got": "UNKNOWN",
+        "confidence": 0.2,
+        "safe": true,
+        "cues": [
+          "no answer cue found"
+        ]
+      },
+      {
+        "id": "u087",
+        "kind": "DOSE_CHECK",
+        "text": "صرت اخذ ١٤ وحده بالليل",
+        "expected": "NEW_DOSE",
+        "got": "UNKNOWN",
+        "confidence": 0.2,
+        "safe": true,
+        "cues": [
+          "no answer cue found"
+        ]
+      }
+    ]
+  }
+}

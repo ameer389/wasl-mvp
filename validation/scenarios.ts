@@ -12,10 +12,10 @@
  */
 import { buildCareGraph } from '../src/domain/careGraph';
 import { DRUGS, findDuplicates } from '../src/domain/drugs';
-import { evaluate } from '../src/domain/gapEngine';
+import { evaluate, gapId, VERIFY_THRESHOLD } from '../src/domain/gapEngine';
 import { planQuestions } from '../src/domain/questionPlanner';
 import { FOLLOW_UP_DAYS } from '../src/domain/time';
-import type { CareTask, Evidence, Gap, GapType, MedAction, Patient, PlanMedication } from '../src/domain/types';
+import type { AuditEntry, CareTask, Evidence, Gap, GapType, MedAction, Patient, PlanMedication } from '../src/domain/types';
 
 export const SCENARIO_SEED = 20261114;
 export const INJECTED_SCENARIOS = 50;
@@ -23,7 +23,7 @@ export const CLEAN_CONTROLS = 10;
 /** Assumption used for "minutes saved": one check-in question takes about this long by phone. */
 export const MINUTES_PER_QUESTION = 1.5;
 
-export const GAP_TYPES: GapType[] = [
+export const ORIGINAL_GAP_TYPES: GapType[] = [
   'NOT_STARTED',
   'STOPPED_STILL_TAKEN',
   'WRONG_DOSE',
@@ -35,6 +35,7 @@ export const GAP_TYPES: GapType[] = [
   'NO_RESPONSE',
   'LOW_CONFIDENCE',
 ];
+export const GAP_TYPES: GapType[] = [...ORIGINAL_GAP_TYPES, 'TASK_NOT_COMPLETED', 'FOLLOWUP_ATTENDANCE_UNCONFIRMED'];
 
 export interface ExpectedGap {
   type: GapType;
@@ -204,13 +205,15 @@ export function generateScenarios(seed: number = SCENARIO_SEED): Scenario[] {
           break;
         }
         case 'DUPLICATE_THERAPY':
-          extra.push(ev({ source: 'patient_voice', day: int(1, 3), claim: 'TAKING_UNLISTED', drugId: duplicateDrug as string, confidence: between(0.5, 0.95) }));
-          expected.push({ type, key: duplicateDrug as string });
+        case 'UNLISTED_MED': {
+          const drugId = (type === 'DUPLICATE_THERAPY' ? duplicateDrug : unlistedDrug) as string;
+          const report = ev({ source: 'patient_voice', day: int(1, 3), claim: 'TAKING_UNLISTED', drugId, confidence: between(0.5, 0.95) });
+          extra.push(report);
+          expected.push(report.confidence < VERIFY_THRESHOLD
+            ? { type: 'LOW_CONFIDENCE', key: gapId(id, 'LOW_CONFIDENCE', report.id) }
+            : { type, key: drugId });
           break;
-        case 'UNLISTED_MED':
-          extra.push(ev({ source: 'patient_voice', day: int(1, 3), claim: 'TAKING_UNLISTED', drugId: unlistedDrug as string, confidence: between(0.5, 0.95) }));
-          expected.push({ type, key: unlistedDrug as string });
-          break;
+        }
         case 'LAB_MISSED': {
           const t = taskOf('LAB_DONE');
           // Sometimes the patient says it was done, but no result ever arrives from the lab.
@@ -239,7 +242,7 @@ export function generateScenarios(seed: number = SCENARIO_SEED): Scenario[] {
   // 5 scenarios per gap type; about a third get a second, independent gap.
   const SECOND: GapType[] = ['UNLISTED_MED', 'LAB_MISSED', 'FOLLOWUP_NOT_BOOKED'];
   for (let i = 0; i < INJECTED_SCENARIOS; i++) {
-    const primary = GAP_TYPES[i % GAP_TYPES.length] as GapType;
+    const primary = ORIGINAL_GAP_TYPES[i % ORIGINAL_GAP_TYPES.length] as GapType;
     const types = [primary];
     if (chance(0.33)) {
       const second = pick(SECOND);
@@ -250,6 +253,52 @@ export function generateScenarios(seed: number = SCENARIO_SEED): Scenario[] {
   }
   for (let i = 0; i < CLEAN_CONTROLS; i++) scenarios.push(build(i, 'control', []));
   return scenarios;
+}
+
+/** Focused Phase 06 inputs. The historical seeded scenarios and their draws stay intact. */
+export function phase06Scenarios(): Scenario[] {
+  const cases = [
+    { id: 'continue-negative', type: 'MED_CONTINUE', claim: 'NOT_DONE', source: 'family', gap: 'TASK_NOT_COMPLETED' },
+    { id: 'wound-negative', type: 'WOUND_CHECK', claim: 'NOT_DONE', source: 'patient_app', gap: 'TASK_NOT_COMPLETED' },
+    { id: 'dose-unspecified', type: 'MED_DOSE_CHANGE', claim: 'NOT_DONE', source: 'patient_voice', gap: 'TASK_NOT_COMPLETED' },
+    { id: 'attendance-unavailable', type: 'FOLLOWUP_ATTENDED', claim: 'DONE', source: 'family', gap: 'FOLLOWUP_ATTENDANCE_UNCONFIRMED' },
+    { id: 'weak-lab', type: 'LAB_DONE', claim: 'DONE', source: 'lab_system', eventKind: 'LAB_RESULT', confidence: 0.69, gap: 'LAB_MISSED' },
+    { id: 'booking-on-visit', type: 'FOLLOWUP_ATTENDED', claim: 'DONE', source: 'appointment_system', eventKind: 'APPOINTMENT_BOOKING', gap: 'FOLLOWUP_ATTENDANCE_UNCONFIRMED' },
+    { id: 'attendance-negative', type: 'FOLLOWUP_ATTENDED', claim: 'NOT_DONE', source: 'appointment_system', eventKind: 'APPOINTMENT_ATTENDANCE', gap: 'FOLLOWUP_MISSED' },
+    { id: 'eligible-outcomes', type: 'LAB_DONE', claim: 'DONE', source: 'lab_system', eventKind: 'LAB_RESULT', confidence: 0.7, gap: undefined },
+  ] as const satisfies readonly {
+    id: string; type: CareTask['type']; claim: Evidence['claim']; source: Evidence['source'];
+    eventKind?: Evidence['eventKind']; confidence?: number; gap?: GapType;
+  }[];
+  return cases.map((entry) => {
+    const id = 'p06-' + entry.id;
+    const patient: Patient = {
+      id, nameEn: 'Synthetic follow-up', nameAr: 'حالة تجريبية', age: 55, sex: 'M',
+      plan: {
+        patientId: id, hospital: 'Synthetic hospital', diagnosisLabel: 'Synthetic check-in case',
+        meds: [
+          { drugId: 'metformin', action: 'CONTINUE', dose: 'as written', frequency: 'as written', prescriber: 'Synthetic prescriber' },
+          { drugId: 'insulin-glargine', action: 'CHANGED', dose: 'as written', previousDose: 'earlier dose', frequency: 'as written', prescriber: 'Synthetic prescriber' },
+        ],
+        labs: [{ id: 'lab', test: 'Synthetic lab', dueDay: 3 }],
+        followUps: [{ id: 'visit', clinic: 'Synthetic clinic', bookByDay: 1, visitDay: 3 }],
+        woundCare: { instructions: 'Synthetic wound check', checkDay: 3 },
+      },
+    };
+    const tasks = buildCareGraph(patient);
+    const target = tasks.find((task) => task.type === entry.type)!;
+    const evidence = tasks.map((task): Evidence => {
+      const eventKind: Evidence['eventKind'] = task.type === 'LAB_DONE' ? 'LAB_RESULT' : task.type === 'FOLLOWUP_BOOKED' ? 'APPOINTMENT_BOOKING'
+        : task.type === 'FOLLOWUP_ATTENDED' ? 'APPOINTMENT_ATTENDANCE' : undefined;
+      const outcome = task.id === target.id
+        ? { claim: entry.claim, source: entry.source, ...('eventKind' in entry ? { eventKind: entry.eventKind } : {}),
+            confidence: 'confidence' in entry ? entry.confidence : 1 }
+        : { claim: 'DONE' as const, source: task.type === 'LAB_DONE' ? 'lab_system' as const : eventKind ? 'appointment_system' as const : 'patient_app' as const,
+            eventKind, confidence: 1 };
+      return { id: 'obs-' + task.id, taskId: task.id, patientId: id, day: task.deadlineDay, confirmedByHuman: false, ...outcome };
+    });
+    return { id, kind: entry.gap ? 'injected' : 'control', patient, evidence, expected: entry.gap ? [{ type: entry.gap, key: target.id }] : [], evalDay: 4 };
+  });
 }
 
 // ── evaluation ──────────────────────────────────────────────────────────────
@@ -361,6 +410,16 @@ export interface QuestionReductionReport {
   fullScriptPerPatientDay: number;
   minutesPerQuestionAssumed: number;
   minutesSavedPerPatientDay: number;
+  replay: {
+    presented: number;
+    deferredTaskQuestions: number;
+    eligibleTasks: number;
+    reachedTasks: number;
+    eligibleHighRiskTasks: number;
+    reachedHighRiskTasks: number;
+    repeatTaskPresentations: number;
+    openMedsPresentations: number;
+  };
 }
 
 /** Adaptive check-in vs the full phone script, over every scenario and every day 0–14. */
@@ -368,15 +427,48 @@ export function runQuestionReduction(scenarios: readonly Scenario[]): QuestionRe
   let adaptive = 0;
   let baseline = 0;
   let patientDays = 0;
+  const replay = {
+    presented: 0, deferredTaskQuestions: 0, eligibleTasks: 0, reachedTasks: 0,
+    eligibleHighRiskTasks: 0, reachedHighRiskTasks: 0, repeatTaskPresentations: 0, openMedsPresentations: 0,
+  };
   for (const s of scenarios) {
     const tasks = buildCareGraph(s.patient);
+    const high = new Set(tasks.filter((task) => task.risk === 'high').map((task) => task.id));
+    const eligible = new Set<string>();
+    const reached = new Set<string>();
+    const audit: AuditEntry[] = [];
     for (let day = 0; day <= FOLLOW_UP_DAYS; day++) {
-      const { taskStatus } = evaluate(s.patient, tasks, s.evidence, [], day);
-      const plan = planQuestions(s.patient, tasks, s.evidence, taskStatus, day);
+      const evaluation = evaluate(s.patient, tasks, s.evidence, [], day);
+      const plan = planQuestions(s.patient, tasks, s.evidence, evaluation, day);
       adaptive += plan.questions.length;
       baseline += plan.baseline.length;
       patientDays++;
+
+      // One synthetic session per day. Present its questions without inventing
+      // any new answers, to isolate the effect of persisted scheduling history.
+      const scheduled = planQuestions(s.patient, tasks, s.evidence, evaluation, day, audit);
+      replay.deferredTaskQuestions += scheduled.deferredTaskIds.length;
+      for (const id of scheduled.deferredTaskIds) eligible.add(id);
+      for (const question of scheduled.questions) {
+        replay.presented++;
+        if (question.taskId) {
+          eligible.add(question.taskId);
+          if (reached.has(question.taskId)) replay.repeatTaskPresentations++;
+          reached.add(question.taskId);
+        } else {
+          replay.openMedsPresentations++;
+        }
+        audit.push({
+          id: `replay-${audit.length + 1}`, action: 'CHECKIN_PRESENTED',
+          day: day + (s.patient.dischargeDay ?? 0), at: '', actor: 'Synthetic replay',
+          target: question.taskId ?? s.patient.id, evidenceCount: s.evidence.length,
+        });
+      }
     }
+    replay.eligibleTasks += eligible.size;
+    replay.reachedTasks += reached.size;
+    replay.eligibleHighRiskTasks += [...eligible].filter((id) => high.has(id)).length;
+    replay.reachedHighRiskTasks += [...reached].filter((id) => high.has(id)).length;
   }
   const r1 = (x: number) => Math.round(x * 10) / 10;
   return {
@@ -388,6 +480,7 @@ export function runQuestionReduction(scenarios: readonly Scenario[]): QuestionRe
     fullScriptPerPatientDay: r1(baseline / patientDays),
     minutesPerQuestionAssumed: MINUTES_PER_QUESTION,
     minutesSavedPerPatientDay: r1(((baseline - adaptive) / patientDays) * MINUTES_PER_QUESTION),
+    replay,
   };
 }
 

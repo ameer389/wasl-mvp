@@ -137,7 +137,7 @@ export const SAMPLE_PATIENTS: Patient[] = [
       hospital: GENERAL,
       diagnosisLabel: 'Asthma exacerbation',
       meds: [
-        { drugId: 'prednisolone', dose: '40 mg', frequency: 'once daily for 5 days', action: 'NEW', prescriber: `Pulmonology · ${GENERAL}` },
+        { drugId: 'prednisolone', dose: '40 mg', frequency: 'once daily for 5 days', action: 'NEW', prescriber: `Pulmonology · ${GENERAL}`, treatmentEndDay: 5 },
         { drugId: 'salbutamol', dose: '2 puffs', frequency: 'as needed', action: 'CONTINUE', prescriber: `Pulmonology · ${GENERAL}` },
         { drugId: 'levothyroxine', dose: '100 mcg', frequency: 'once daily', action: 'CONTINUE', prescriber: `Pulmonology · ${GENERAL}` },
       ],
@@ -194,7 +194,7 @@ export const SAMPLE_EVIDENCE: Evidence[] = [
   ev({ patientId: 'demo-005', taskId: t('demo-005', 'FOLLOWUP_BOOKED', 'im-clinic', 3), source: 'appointment_system', day: 1, claim: 'DONE', detail: 'Internal medicine clinic booked for Day 10' }),
 
   // demo-006 Umm Nasser (everything verified)
-  ev({ patientId: 'demo-006', taskId: t('demo-006', 'MED_START', 'prednisolone', 1), source: 'ehr', day: 0, claim: 'DONE', detail: 'Dispensed by discharge pharmacy' }),
+  ev({ patientId: 'demo-006', taskId: t('demo-006', 'MED_START', 'prednisolone', 1), source: 'ehr', day: 0, claim: 'DONE', eventKind: 'DISPENSED', detail: 'Dispensed by discharge pharmacy' }),
   ev({ patientId: 'demo-006', taskId: t('demo-006', 'FOLLOWUP_BOOKED', 'chest-clinic', 2), source: 'appointment_system', day: 1, claim: 'DONE', detail: 'Chest clinic booked for Day 7' }),
   ev({ patientId: 'demo-006', taskId: t('demo-006', 'MED_START', 'prednisolone', 1), source: 'patient_voice', day: 1, claim: 'DONE', rawText: 'إيه بديت الكورتيزون الصبح', confidence: 0.94 }),
   ev({ patientId: 'demo-006', taskId: t('demo-006', 'LAB_DONE', 'glucose', 3), source: 'lab_system', day: 2, claim: 'DONE', detail: 'Blood glucose result received' }),

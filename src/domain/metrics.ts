@@ -43,9 +43,7 @@ export function questionSavings(plans: readonly QuestionPlan[]): QuestionSavings
 
 /** Latest patient/family answer for a patient, up to today. */
 export function lastCheckIn(evidence: readonly Evidence[], patientId: string, today: Day): Evidence | undefined {
-  return evidence
-    .filter((e) => e.patientId === patientId && e.day <= today && isPatientSideSource(e.source))
-    .reduce<Evidence | undefined>((latest, e) => (!latest || e.day >= latest.day ? e : latest), undefined);
+  return evidenceKnownBy(evidence, patientId, today).filter((e) => isPatientSideSource(e.source)).at(-1);
 }
 
 const RISK_RANK: Record<Risk, number> = { high: 0, medium: 1, low: 2 };
@@ -60,10 +58,6 @@ export function daysOpen(gap: Gap, today: Day): number {
 
 /** Latest evidence items for a patient (newest first), up to today. */
 export function latestEvidence(evidence: readonly Evidence[], patientId: string, today: Day, limit = 3): Evidence[] {
-  return evidence
-    .map((e, i) => ({ e, i }))
-    .filter(({ e }) => e.patientId === patientId && e.day <= today)
-    .sort((a, b) => b.e.day - a.e.day || b.i - a.i)
-    .slice(0, limit)
-    .map(({ e }) => e);
+  return evidenceKnownBy(evidence, patientId, today).reverse().slice(0, limit);
 }
+import { evidenceKnownBy } from './medicationEvidence';

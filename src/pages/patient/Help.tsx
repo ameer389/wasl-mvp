@@ -34,14 +34,14 @@ export default function Help() {
         <h2 className="text-lg font-bold">وش يسوي وصل بأجوبتك؟</h2>
         <ul className="flex list-disc flex-col gap-1 ps-5 text-lg leading-relaxed text-ink-2">
           <li>يقارن أجوبتك بخطة خروجك من المستشفى.</li>
-          <li>إذا فيه شي مو واضح أو ناقص، يوصل للفريق الطبي.</li>
-          <li>الفريق الطبي هو اللي يقرر ويتواصل معك.</li>
+          <li>إذا فيه شي مو واضح أو ناقص، يطلع للمراجعة داخل العرض التجريبي.</li>
+          <li>واجهة الفريق الطبي تعرض كيف يوثّق الفريق قراره.</li>
         </ul>
       </Card>
 
       <p className="flex items-start gap-2 text-base leading-relaxed text-muted">
         <Lock size={20} aria-hidden="true" className="mt-1 shrink-0" />
-        هذي نسخة تجريبية ببيانات وهمية. أجوبتك تنحفظ في هذا الجهاز بس، وما تنرسل لأي جهة.
+        هذي نسخة تجريبية ببيانات وهمية. سجلات الأجوبة تنحفظ في هذا المتصفح، وخدمة التعرّف على الصوت قد تعالج التسجيل خارج الجهاز.
       </p>
     </div>
   );

@@ -4,11 +4,13 @@
  */
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import { targetsPatient } from '../domain/auditTrail';
+import { claimOptionsFor } from '../domain/claimOptions';
 import type { QuestionPlan } from '../domain/questionPlanner';
 import type { TourEvent } from '../domain/tour';
-import type { CareTask, Day, Evidence, EvidenceClaim, Patient, ResolutionAction } from '../domain/types';
+import type { AdministrativeReason, AuditEntry, CareTask, Day, Disposition, Evidence, EvidenceClaim, OpenMedsOutcome, Patient } from '../domain/types';
+import { observeLifecycle } from './lifecycle';
 import type { DemoState } from './demoState';
-import { loadState, saveState } from './persistence';
+import { isDemoState, loadState, saveState } from './persistence';
 import { demoReducer } from './reducer';
 import { buildAllTasks, dayFor, evaluateAll, planAll, type AllEvaluation } from './selectors';
 
@@ -28,11 +30,16 @@ interface DemoStore {
   setDay: (day: Day) => void;
   addEvidence: (evidence: Evidence, actor?: string) => void;
   /** Clinician records what they verified with the patient (confidence 1, confirmed by a human). */
-  confirmTask: (patientId: string, taskId: string, claim: EvidenceClaim, note?: string) => void;
-  resolveGap: (gapId: string, action: ResolutionAction, note?: string, by?: string) => void;
+  confirmTask: (patientId: string, taskId: string, claim: EvidenceClaim, note?: string, gapId?: string) => void;
+  reviewMedicationReport: (report: Evidence, claim: 'STOPPED' | 'TAKING_UNLISTED', drugId: string | undefined, historical: boolean, note?: string, gapId?: string) => void;
+  resolveGap: (gapId: string, action: 'CALLED' | 'INTERVENED' | 'RESOLVED', details: {
+    note?: string; disposition?: Disposition; reasonCode?: AdministrativeReason; contactOutcome?: 'reached' | 'no_answer';
+  }) => number;
+  undoResolution: (gapId: string, resolutionSeq: number) => void;
   addPatient: (patient: Patient, by?: string) => void;
   /** Save one check-in answer (evidence + one audit entry). */
-  recordAnswer: (patientId: string, evidence: Evidence[], meta: { actor: string; target: string; note: string }) => void;
+  recordPresentation: (patientId: string, target: string, actor: string) => void;
+  recordAnswer: (patientId: string, evidence: Evidence[], meta: { actor: string; target: string; note: string; openMedsOutcome?: OpenMedsOutcome; presentation?: AuditEntry }) => string;
   completeCheckin: (patientId: string, actor: string, note: string) => void;
   tour: (event: TourEvent) => void;
   reset: () => void;
@@ -44,18 +51,18 @@ const StoreContext = createContext<DemoStore | null>(null);
 const now = () => new Date().toISOString();
 
 export function DemoStoreProvider({ children, initialState }: { children: ReactNode; initialState?: DemoState }) {
-  const [state, dispatch] = useReducer(demoReducer, initialState, (init) => init ?? loadState());
+  const [state, dispatch] = useReducer(demoReducer, initialState, (init) => isDemoState(init) ? init : loadState());
 
   useEffect(() => saveState(state), [state]);
 
   const tasksByPatient = useMemo(() => buildAllTasks(state.patients), [state.patients]);
   const evaluation = useMemo(
-    () => evaluateAll(state.patients, tasksByPatient, state.evidence, state.resolutions, state.simulatedDay),
-    [state.patients, tasksByPatient, state.evidence, state.resolutions, state.simulatedDay],
+    () => evaluateAll(state.patients, tasksByPatient, state.evidence, state.resolutions, state.simulatedDay, state.audit),
+    [state.patients, tasksByPatient, state.evidence, state.resolutions, state.simulatedDay, state.audit],
   );
   const questionPlans = useMemo(
-    () => planAll(state.patients, tasksByPatient, state.evidence, evaluation.statuses, state.simulatedDay),
-    [state.patients, tasksByPatient, state.evidence, evaluation.statuses, state.simulatedDay],
+    () => planAll(state.patients, tasksByPatient, state.evidence, evaluation, state.simulatedDay, state.audit),
+    [state.patients, tasksByPatient, state.evidence, evaluation, state.simulatedDay, state.audit],
   );
 
   const store = useMemo<DemoStore>(() => {
@@ -72,9 +79,12 @@ export function DemoStoreProvider({ children, initialState }: { children: ReactN
       patientToday,
       setDay: (day) => dispatch({ type: 'SET_DAY', day }),
       addEvidence: (evidence, actor = 'Patient app') => dispatch({ type: 'ADD_EVIDENCE', evidence, actor, at: now() }),
-      confirmTask: (patientId, taskId, claim, note) =>
+      confirmTask: (patientId, taskId, claim, note, gapId) => {
+        const task = tasksByPatient[patientId]?.find((item) => item.id === taskId);
+        if (!task || !claimOptionsFor(task.type).some((option) => option.claim === claim)) return;
         dispatch({
           type: 'ADD_EVIDENCE',
+          gapId,
           actor: DEMO_CLINICIAN,
           at: now(),
           evidence: {
@@ -88,20 +98,51 @@ export function DemoStoreProvider({ children, initialState }: { children: ReactN
             confidence: 1,
             confirmedByHuman: true,
           },
+        });
+      },
+      reviewMedicationReport: (report, claim, drugId, historical, note, gapId) =>
+        dispatch({
+          type: 'ADD_EVIDENCE',
+          gapId,
+          basedOnEvidenceId: report.id,
+          actor: DEMO_CLINICIAN,
+          at: now(),
+          evidence: {
+            id: `clin-${state.evidence.length + 1}-${Date.now().toString(36)}`,
+            patientId: report.patientId,
+            source: 'clinician',
+            day: historical ? report.day : patientToday(report.patientId),
+            claim,
+            ...(drugId ? { drugId } : {}),
+            ...(historical ? { correctsEvidenceId: report.id } : {}),
+            detail: note?.trim() || (historical ? 'Earlier report reviewed with the patient' : 'Current use reviewed with the patient'),
+            confidence: 1,
+            confirmedByHuman: true,
+          },
         }),
-      resolveGap: (gapId, action, note, by = DEMO_CLINICIAN) =>
+      resolveGap: (gapId, action, details) => {
+        const expectedSeq = observeLifecycle(state).audit.length + 1;
         dispatch({
           type: 'RESOLVE_GAP',
           gapId,
           action,
-          note,
-          by,
+          ...details,
+          by: DEMO_CLINICIAN,
           at: now(),
-          // gap ids start with the patient id: resolutions live on the patient's timeline
-          patientDay: patientToday(gapId.split(':')[0] ?? ''),
-        }),
+          expectedSeq,
+        });
+        return expectedSeq;
+      },
+      undoResolution: (gapId, resolutionSeq) => dispatch({
+        type: 'UNDO_RESOLUTION', gapId, resolutionSeq, by: DEMO_CLINICIAN, at: now(),
+      }),
       addPatient: (patient, by = DEMO_CLINICIAN) => dispatch({ type: 'ADD_PATIENT', patient, by, at: now() }),
-      recordAnswer: (patientId, evidence, meta) => dispatch({ type: 'RECORD_ANSWER', patientId, evidence, ...meta, at: now() }),
+      recordPresentation: (patientId, target, actor) => dispatch({ type: 'RECORD_PRESENTATION', patientId, target, actor, at: now() }),
+      recordAnswer: (patientId, evidence, meta) => {
+        const at = now();
+        dispatch({ type: 'RECORD_ANSWER', patientId, evidence, ...meta, at });
+        return at;
+      },
       completeCheckin: (patientId, actor, note) => dispatch({ type: 'COMPLETE_CHECKIN', patientId, actor, note, at: now() }),
       tour: (event) => dispatch({ type: 'TOUR', event }),
       reset: () => dispatch({ type: 'RESET' }),

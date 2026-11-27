@@ -1,15 +1,64 @@
 import { MessageCircleQuestion, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { daysOpen, latestEvidence } from '../../../domain/metrics';
+import { effectiveDecisions, gapObservations } from '../../../domain/gapLifecycle';
+import { GAP_TYPE_LABEL, gapSubject } from '../../../domain/labels';
+import type { Gap, GapObservation, GapResolution } from '../../../domain/types';
 import { useDemoStore, useQuestionPlan } from '../../../state/store';
-import { Card, EmptyState, InfoTip } from '../../ui';
+import { clearanceEvidence } from '../../../state/lifecycle';
+import { Button, Card, EmptyState, Field, InfoTip, textareaClasses } from '../../ui';
 import { EvidenceItem } from '../evidence';
+import { RiskBadge } from '../badges';
 import { GapCard } from './GapCard';
 import type { PatientView } from './types';
 
+function DispositionRow({ gap, label, disposition, proof, pending }: {
+  gap: Gap; label: string; disposition?: GapResolution; proof?: GapObservation['clearance']; pending?: boolean;
+}) {
+  const store = useDemoStore();
+  const [editing, setEditing] = useState(false);
+  const [note, setNote] = useState('');
+  return (
+    <Card className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <RiskBadge risk={gap.risk} />
+        <h3 className="text-sm font-semibold">{label}</h3>
+      </div>
+      <p className="text-sm text-muted">
+        {pending ? 'Administratively closed. The underlying condition is still present.'
+          : proof?.disposition === 'REPORT_CORRECTED' ? 'Condition cleared after a report correction.'
+            : proof ? 'Condition cleared with eligible evidence.' : 'The underlying condition is no longer present.'}
+      </p>
+      {disposition?.note && <p className="text-xs text-muted">{disposition.note}</p>}
+      {disposition?.seq !== undefined && (
+        <Button size="sm" variant="ghost" onClick={() => store.undoResolution(gap.id, disposition.seq!)}>Undo resolution</Button>
+      )}
+      {!pending && proof && !disposition && !editing &&
+        <Button size="sm" onClick={() => setEditing(true)}>
+          {proof.disposition === 'REPORT_CORRECTED' ? 'Document resolution after correction' : 'Document evidence-supported resolution'}
+        </Button>}
+      {editing && proof && !disposition && (
+        <form className="space-y-2" onSubmit={(event) => {
+          event.preventDefault();
+          if (!note.trim()) return;
+          store.resolveGap(gap.id, 'RESOLVED', { disposition: proof.disposition, note });
+          setEditing(false);
+          setNote('');
+        }}>
+          <Field label="Resolution note (required)">
+            <textarea className={textareaClasses} rows={2} required value={note} onChange={(event) => setNote(event.target.value)} />
+          </Field>
+          <Button size="sm" type="submit" disabled={!note.trim()}>Save resolution</Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+        </form>
+      )}
+    </Card>
+  );
+}
+
 export function OverviewTab({ view, highlightGapId }: { view: PatientView; highlightGapId?: string }) {
   const { patient, tasks, evidence, gaps, today } = view;
-  const { state } = useDemoStore();
+  const { state, evaluation } = useDemoStore();
   const plan = useQuestionPlan(patient.id);
   const refs = useRef(new Map<string, HTMLDivElement>());
   const [flash, setFlash] = useState<string | undefined>(highlightGapId);
@@ -25,7 +74,13 @@ export function OverviewTab({ view, highlightGapId }: { view: PatientView; highl
     return () => clearTimeout(t);
   }, [highlightGapId]);
 
-  const inReview = (gapId: string) => state.resolutions.some((r) => r.gapId === gapId && r.action !== 'RESOLVED');
+  const current = evaluation.byPatient[patient.id];
+  const closed = [...(current?.conditions.values() ?? [])].filter(({ gap }) => current?.lifecycle.get(gap.id)?.disposition);
+  const cleared = [...gapObservations(state.audit, state.simulatedDay).values()].flatMap((entry) =>
+    entry.action === 'GAP_CONDITION_CLEARED' && entry.observation?.gap.patientId === patient.id &&
+    !current?.conditions.has(entry.target) ? [entry.observation] : []);
+  const decisions = effectiveDecisions(state.resolutions, today);
+  const label = (gap: Gap) => `${GAP_TYPE_LABEL[gap.type]} · ${gapSubject(gap, tasks, patient)}`;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -34,12 +89,12 @@ export function OverviewTab({ view, highlightGapId }: { view: PatientView; highl
           <EmptyState
             icon={ShieldCheck}
             title="No open gaps"
-            text={`Everything due for ${patient.nameEn} so far is verified or still within its deadline. WASL keeps checking quietly.`}
+            text="No actionable gaps are open. Check Expected vs actual for each task’s verification status."
           />
         ) : (
           gaps.map((g) => (
             <GapCard
-              key={g.id}
+              key={g.id + (current?.lifecycle.get(g.id)?.fingerprint ?? '') + (current?.lifecycle.get(g.id)?.episodeId ?? '')}
               ref={(el) => {
                 if (el) refs.current.set(g.id, el);
                 else refs.current.delete(g.id);
@@ -48,11 +103,22 @@ export function OverviewTab({ view, highlightGapId }: { view: PatientView; highl
               patient={patient}
               tasks={tasks}
               evidence={evidence}
-              inReview={inReview(g.id)}
+              lifecycle={current?.lifecycle.get(g.id)}
               highlighted={flash === g.id}
               daysOpen={daysOpen(g, today)}
             />
           ))
+        )}
+        {(closed.length > 0 || cleared.length > 0) && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold">Closed and cleared conditions</h2>
+            {closed.map(({ gap }) =>
+              <DispositionRow key={gap.id} gap={gap} label={label(gap)} pending disposition={current?.lifecycle.get(gap.id)?.disposition} />)}
+            {cleared.map(({ gap, episodeId }) =>
+              <DispositionRow key={episodeId} gap={gap} label={label(gap)} proof={current && clearanceEvidence(gap, current)}
+                disposition={decisions.filter((r) => r.gapId === gap.id && r.episodeId === episodeId &&
+                  r.action === 'RESOLVED' && r.disposition !== 'ADMINISTRATIVE').at(-1)} />)}
+          </div>
         )}
       </section>
 
